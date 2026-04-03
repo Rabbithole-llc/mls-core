@@ -1,0 +1,32 @@
+{
+  "instance_id": null,
+  "created_at": null,
+  "sessions": {
+    "total_count": 0,
+    "total_duration_minutes": 0,
+    "last_session": {
+      "number": 0,
+      "user": null,
+      "started_at": null,
+      "ended_at": null,
+      "duration_minutes": 0
+    }
+  },
+  "users": {
+    "unique_users": [],
+    "total_count": 0
+  },
+  "context": {
+    "entries_count": 0,
+    "last_updated": null
+  },
+  "handoffs": {
+    "total_count": 0,
+    "last_handoff_date": null
+  },
+  "value": {
+    "context_recovery_minutes_saved": 0,
+    "context_recovery_formula": "(session_count - 1) * 8",
+    "context_recovery_explanation": "Without persistent context, an agent spends ~8-12 minutes per session re-learning project context. MLS Core reduces this to under 1 minute. We use the conservative estimate (8 min) and exclude the first session (setup)."
+  }
+}
