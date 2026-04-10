@@ -1,0 +1,10 @@
+{
+  "max_entries": 5,
+  "max_age_days": 90,
+  "min_score": 0.3,
+  "max_tokens_in_handoff": 400,
+  "pinned_entry_ids": [],
+  "excluded_entry_ids": [],
+  "excluded_project_ids": [],
+  "auto_append_to_handoff": true
+}

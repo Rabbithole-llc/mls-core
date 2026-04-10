@@ -3,33 +3,513 @@ name: mls-core-start
 description: "Session start for MLS Core — the Memory Layer System. Handles both first-time setup (initializing persistent memory on a new folder) and returning-session bootstrap (loading context, displaying status, reading the last agent's handoff). Use this skill whenever the user says /mls-core-start, 'start session', 'start mls', 'bootstrap', 'load context', 'initialize mls', 'set up memory', or at the start of any session where the agent needs to work within an MLS Core-enabled folder. Also trigger if you detect a .mls/ directory in the current workspace — that means MLS Core is installed and you should bootstrap before doing any work."
 ---
 
-# MLS Core — Session Start
+# MLS Core V3 — Session Start
 
-You are running the MLS Core session bootstrap. This skill handles two scenarios:
-1. **First run** — The folder doesn't have MLS Core yet (or it's uninitialized). You'll set it up.
-2. **Returning session** — MLS Core is already initialized. You'll load context, display status, and get ready to work.
+## ⛔ HARD RULE: MODE ENFORCEMENT
 
-The goal is simple: make sure the agent has full, fresh context before doing any work. Persistent memory is what makes MLS Core valuable — every session builds on the last one.
+**Before writing a single JSX file or calling `present_files`, you MUST have confirmed `MODE = "visual"` from the user's explicit response.**
+
+- If `MODE = "text"` → **never** use the Write tool for `.jsx` files. **Never** call `present_files`. All output is plain text only. Violating this is a critical failure.
+- If `MODE = "visual"` → use JSX templates as described below.
+- If the user chose "2", "text", "fast", or anything non-visual → `MODE = "text"`. Do not default to visual.
+
+**Checkpoint before every JSX write:** Ask yourself — "Did the user explicitly pick visual mode?" If no → do not write JSX. Output plain text instead.
+
+---
+
+## Step -1: Ask Experience Mode
+
+**Before doing anything else**, ask the user which boot experience they want. Use plain text (no JSX yet):
+
+> "Welcome to MLS Core. How would you like to proceed?
+> 1. **Visual experience** — animated boot sequence with living backgrounds (recommended for first-time)
+> 2. **Text experience** — fast, no graphics, straight to business
+>
+> Reply 1 or 2 (or just say 'text' or 'visual')."
+
+- If user says **1**, "visual", or anything explicitly indicating the graphic experience → set `MODE = "visual"` and follow the Rendering Protocol below.
+- If user says **2**, "text", "fast", "skip", "no graphics", or anything indicating text mode → set `MODE = "text"`. **Immediately stop. Do not write any JSX. Do not call present_files. Every single output from this point is plain text in the chat.** Still execute the full boot logic (detect state, read config, create .mls/, sync, etc.) — just deliver everything as concise text.
+- If user doesn't respond to the mode question and just says "yes" or confirms the folder → default to `MODE = "visual"`.
+- **Ambiguous reply (e.g., a number that could be a folder pick or mode pick):** re-read the conversation. If you haven't yet shown the mode question, treat the reply as a mode pick. "2" = text mode.
+
+**In text mode**, replace each visual phase with a brief text equivalent:
+- "folder_pick" → list all mounted folders, ask which one to use for MLS
+- "connect" → list the 3 connection options with memorylayer.pro URL visible, ask user to pick
+- "setup" → list the 3 setup options, ask user to pick
+- "capabilities" → list the 5 commands
+- "complete" → print checklist summary
+- Reconnect → print project name, session number, last handoff, goals, tasks, connections status
+- Loading → print "Working on: [step]..." for each step
+
+---
+
+## Step -0.5: Folder Selection (always runs before Step 0, in both modes)
+
+**Detect all mounted workspace folders** by checking the file system. The user may have multiple folders open for reading context — MLS Core must initialize in ONE chosen project folder only.
+
+**If only one folder is mounted:** Auto-select it. Skip the picker entirely. Proceed immediately to Step 0 with no user interaction needed.
+
+**If multiple folders are mounted:** Show a picker using plain text (this happens before any JSX screen, in both modes):
+
+> "You have [N] folders open. MLS Core sets up in ONE project folder — your other folders stay available as context.
+>
+> First-time setup: Which folder is your **active project**?
+> 1. FolderA — [brief path hint]
+> 2. FolderB — [brief path hint]
+> 3. FolderC — [brief path hint]
+>
+> Reply with a number."
+
+Once the user picks, set `WORKSPACE = [chosen folder path]`. All `.mls/` file operations use this path from here on. Never create `.mls/` in the other folders — they are context-only.
+
+**Speed rule:** This step uses plain text only, even in visual mode. No JSX. One message, one reply, done.
+
+---
+
+## TEXT MODE Protocol (MODE = "text")
+
+**If the user picked text mode, follow this section and skip the Rendering Protocol entirely.**
+
+All output is plain chat text. No JSX files. No `present_files` calls. Run all the same logic (detect state, create files, call APIs) but surface everything as clean text messages.
+
+### Text Mode Flow — First Run
+
+After folder is selected, print one message per phase. Do NOT wait for "continue" between phases — deliver them as a single flowing conversation:
+
+**Connect:**
+> **MLS Core — [FolderName]** | First-time setup
+>
+> Where should your memory live?
+> 1. **memorylayer.pro** — https://memorylayer.pro — cloud sync, team sharing, analytics
+>    → No account? → https://memorylayer.pro/signup (free)
+> 2. **Notion** — syncs to your Notion workspace
+> 3. **Local only** — stays on this machine, no account needed
+>
+> Reply 1, 2, or 3.
+
+**After connect choice, execute connection logic silently, then print setup options:**
+> Connected ✓ [or "Running local"] — now let's build your context.
+>
+> How should we start?
+> 1. 🔍 **Seed from files** — scan this folder and auto-build context *(recommended — folder has files)*
+> 2. 💬 **Guided setup** — answer 5–6 questions
+> 3. ⚡ **Skip** — start minimal, build context as you work
+>
+> Reply 1, 2, or 3.
+
+**After setup, print summary and toolkit — no user input needed:**
+> ✓ Project memory initialized
+> ✓ 7 context files created
+> ✓ Context seeded from project files
+> ✓ Cloud sync active — https://memorylayer.pro/dashboard
+> ✓ Session 1 live
+>
+> **Your toolkit:** `/mls-core-start` · `/mls-core-stop` · `/mls-push` · `/mls-pull` · `/mls-test` · `/mls-agents`
+> Dashboard: https://memorylayer.pro/dashboard
+>
+> Ready. Say `/mls-core-stop` when done to save your session.
+
+### Text Mode Flow — Returning Session
+
+Print a single compact status block, then stop:
+> **[ProjectName]** | Session [N] | [warm/cold start]
+> Last handoff: [first bullet from For Next Agent]
+> Goals: [N] active | Tasks: [N] active
+> Cloud: ✓ memorylayer.pro connected
+> Dashboard: https://memorylayer.pro/dashboard
+>
+> Ready — what are we working on?
+
+---
+
+## Rendering Protocol (Visual Mode Only)
+
+This section applies ONLY when `MODE = "visual"`. Skip entirely for text mode — use the TEXT MODE Protocol above instead.
+
+This skill communicates via animated React components. Every user-facing output follows this exact sequence:
+
+1. **Read** the appropriate template from `templates/` (relative to this SKILL.md)
+2. **Fill** the DATA/PHASE placeholders with real values
+3. **Write** the populated JSX as `mls-boot.jsx` to the workspace folder
+4. **Call `mcp__cowork__present_files`** with the file path
+5. **STOP** — say nothing. No text. Your turn is over.
+
+Never skip step 4 (present_files) — without it the user sees a dead file link. Never add text after step 4 — the JSX IS the response. Never read a leftover `mls-boot.jsx` — always overwrite with fresh content.
+
+### Templates
+
+| Template | File | When to use |
+|---|---|---|
+| First-Run | `templates/first-run.jsx` | No `.mls/` exists. PHASE: `"boot_folder"` → `"connect"` → `"setup"` → `"capabilities"` → `"complete"` |
+| Reconnect | `templates/reconnect.jsx` | `.mls/` exists, returning session. Auto-plays 7 phases in ~5s. |
+| Upgrade | `templates/upgrade.jsx` | Version mismatch (v1→v2→v3). 6-slide carousel. |
+| Loading | `templates/loading.jsx` | Between phases when doing work. Spinner + progress bar. |
+
+### Template Placeholders
+
+**first-run.jsx:**
+- `DATA.folderName` — workspace folder name
+- `DATA.folderPath` — full path
+- `DATA.isEmptyFolder` — boolean
+- `PHASE` — `"boot_folder"` | `"connect"` | `"setup"` | `"capabilities"` | `"complete"`
+- `CONNECT_DATA.choice` — `"memorylayer"` | `"notion"` | `"local"` (for "connect" phase)
+- `CONNECT_DATA.projectName` — confirmed project name
+- `CONNECT_DATA.dashboardUrl` — memorylayer.pro or Notion URL (shown in "complete" phase)
+- `SETUP_DATA.projectName` — project name (for "complete" phase)
+- `SETUP_DATA.notionConnected` — boolean
+- `SETUP_DATA.mlsConnected` — boolean
+- `SETUP_DATA.communityBrainConnected` — boolean
+
+**reconnect.jsx:**
+- `DATA.projectName`, `DATA.sessionNumber`, `DATA.lastHandoff` (string[])
+- `DATA.activeGoals` ({name, progress}[]), `DATA.activeTasks` (number)
+- `DATA.lastSessionTag`, `DATA.timeSaved`, `DATA.notionConnected`
+- `DATA.mlsConnected`, `DATA.communityBrainConnected`, `DATA.agentCount`
+- `DATA.isWarmStart`, `DATA.lastSessionMinutesAgo`
+
+**loading.jsx:**
+- `LOADING_MESSAGE` — e.g., "Setting up your project"
+- `LOADING_STEPS` — array of 2-4 step descriptions
+
+### Between Phases
+
+When doing work between visual stages:
+1. Write loading template → present_files → STOP
+2. Do internal work (create files, sync, etc.)
+3. Write next phase template → present_files → STOP
+
+Skip the loading screen if the transition is instant (no file creation needed).
+
+### Animation Timing
+
+The first-run boot animation auto-transitions from boot → folder confirm in **3 seconds**. The reconnect animation auto-plays through 7 phases in ~5 seconds (warm start: ~3 seconds).
+
+### Fallback
+
+If the Write tool fails, fall back to text-based communication.
 
 ---
 
 ## Step 0: Detect State
 
-Check if `.mls/config.json` exists in the current working directory or the user's workspace folder.
+Check for `.mls/config.json` in the workspace folder.
 
-- **If `.mls/` doesn't exist** → This is a brand new setup. Go to **First-Run Setup**.
-- **If `.mls/config.json` exists but `initialized` is `false`** → Setup was started but not completed. Go to **First-Run Setup**.
-- **If `.mls/config.json` exists and `initialized` is `true`** → This is a returning session. Go to **Returning Session Bootstrap**.
+- **No `.mls/`** → First-Run Setup
+- **`.mls/config.json` exists, `initialized: false`** → First-Run Setup
+- **`.mls/config.json` exists, `initialized: true`** → Returning Session Bootstrap
+
+### Self-Heal
+
+Before proceeding, validate `.mls/` structure if it exists. Missing/corrupted files → recreate from defaults, warn user:
+- `config.json` missing/invalid → recreate from template, set `initialized: false`
+- `context/` or any of 7 context files missing → recreate from template
+- `metrics.json` missing/invalid → recreate with defaults, infer session count from CHANGELOG
+- `modules/` missing → recreate with MODULE_TEMPLATE.md
+
+**Principle: Core always boots.** No missing file should prevent bootstrap.
 
 ---
 
 ## First-Run Setup
 
-This runs once per folder. It creates the `.mls/` directory structure, walks the user through setup, and initializes persistent memory.
+### Step 0.1: Global Credential Check
 
-### 1. Deploy the Template
+**⚠️ COWORK PATH RULE:** In the Cowork environment, `~` resolves to the **ephemeral** sandbox home (`/sessions/stoic-laughing-bardeen`), which is wiped between sessions. **Never use `~/.mls/` for persistent storage.** Instead, use the **mnt-level path** which maps to the user's real filesystem:
 
-Copy the MLS Core template files from this skill's assets directory into the user's workspace:
+```
+GLOBAL_CREDS_PATH = /sessions/stoic-laughing-bardeen/mnt/.mls/global.json
+```
+
+This persists at `[parent of your selected project folder]/.mls/global.json` on the user's actual machine.
+
+**Before showing any connect screen**, check for a global config file at `GLOBAL_CREDS_PATH` (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`).
+
+```json
+// /sessions/stoic-laughing-bardeen/mnt/.mls/global.json
+{
+  "api_key": "ml_...",
+  "user_id": "uuid",
+  "email": "user@example.com",
+  "connected_at": "ISO date"
+}
+```
+
+> Note: `api_key` is the account-level key returned by `POST /register`. It is stored once globally and reused across all projects. `user_id` is the UUID from the register response's `user.id` field.
+
+**If `GLOBAL_CREDS_PATH` exists and contains a valid `api_key`:**
+
+The user already has a memorylayer.pro account. Skip the full connect phase entirely. Use the stored key to call `POST /register` with just their email (idempotent — returns their existing account). Then let them pick or create a project.
+
+**Re-validate and fetch projects (silently):**
+```
+POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/register
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+X-MLS-Edge-Version: 1
+
+{ "email": "[stored email from global.json]" }
+```
+
+On success: confirm the account is still valid. The response returns the existing `api_key`, `user.id`, and the full `hubs[]` array.
+
+**Hub selection for returning users:**
+
+```
+if response.hubs.length === 1:
+  → Auto-select response.hubs[0]. Store hub_id silently. No prompt.
+
+if response.hubs.length > 1:
+  → Show hub picker BEFORE the project prompt:
+  "Found your memorylayer.pro account ([email]).
+  Which hub should this project live under?
+  [1] HubName1 (personal)
+  [2] HubName2 (team)
+  ...
+  Reply with a number."
+  → Store SELECTED_HUB = response.hubs[chosenIndex]
+
+if response.hubs.length === 0:
+  → Warn and fall through to local-only.
+```
+
+**Visual mode:** Skip the connect screen. Go straight to a short text prompt (no JSX yet):
+
+> "Found your memorylayer.pro account ([email]).
+>
+> Options:
+> 1. **New project** — create "[FolderName]" as a new project in [SELECTED_HUB.name]
+> 2. **Skip** — run local only for now"
+
+(If multiple hubs, show the hub picker above first, then this prompt.)
+
+**Text mode:**
+> "Found your memorylayer.pro account ([email]). Create new project "[FolderName]" under [SELECTED_HUB.name], or skip to run local?"
+
+- **New / 1** → Call `POST /register` with stored email + folder name as `project_name` + `hub_id: SELECTED_HUB.id`. On success: store returned `project_id` and `hub_id` in config.json. Proceed to setup phase.
+- **Rename before creating** → Ask project name, then call register.
+- **Skip / 2** → Run local-only. Store nothing in `.mls/config.json`. User can connect later with `/mls-connect`.
+
+On any error: fall through to local-only, warn user.
+
+**Do not ask for an API key or email again.** Do not show the connect screen. The stored credentials are the account.
+
+---
+
+**If `GLOBAL_CREDS_PATH` does not exist** (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`):
+
+Proceed with the full connect flow below as normal.
+
+---
+
+### SPEED: Show First Screen FAST
+
+The `boot_folder` phase is **eliminated**. The user already chose their folder in Step -0.5 — no need to ask again. Go straight to the connect phase.
+
+After the user picks their mode (Step -1) and their folder (Step -0.5):
+
+**Visual mode:** Deploy the `.mls/` file structure silently, then read `templates/first-run.jsx`, fill DATA with workspace folder name/path, set PHASE = `"connect"`, write as `mls-boot.jsx` → call `present_files` → STOP. No confirmation screen. No loading screen. The connect screen IS the first thing the user sees.
+
+**Text mode:** Deploy `.mls/` silently, then print the connect options directly.
+
+### Phase Flow
+
+First-run goes: **connect → setup → complete**. The `boot_folder` phase is removed entirely.
+
+---
+
+### "connect" Phase — Where Should Memory Live?
+
+**This is the most important choice in first-run.** Show the URL prominently. All three paths are first-class:
+
+> **Where should your memory live?**
+>
+> 1. **memorylayer.pro** — https://memorylayer.pro — Cloud sync, team sharing, session analytics. Sign up or log in with your email — free to start.
+> 2. **Notion** — Syncs to your Notion workspace. Your context lives as a structured, searchable page. Great for solo users already in Notion.
+> 3. **Local only** — Memory stays on this machine. Fast, private, no account needed. Connect later with `/mls-connect`.
+
+Wait for the user's choice (1, 2, 3, or the name of the option).
+
+---
+
+#### Option 1: memorylayer.pro
+
+Ask:
+> "Enter your email address to create your free memorylayer.pro account (or log in if you already have one):"
+
+Take the email the user provides. **This endpoint requires the Supabase anon key as the Authorization header** — use the known value for memorylayer.pro: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4`
+
+**Step 1 — Register / create account + project (one call):**
+```
+POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/register
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+X-MLS-Edge-Version: 1
+
+{
+  "email": "[the email they entered]",
+  "project_name": "[folder name chosen in Step -0.5]"
+}
+```
+
+This endpoint is **idempotent** — if the email already has an account, it returns the existing `api_key` and provisions the new project under it. No separate "list" step or pre-existing key required.
+
+**On 400 (invalid email format):**
+> "That doesn't look like a valid email address. Please try again."
+Re-prompt the email.
+
+**On 422 (validation error):**
+> "Couldn't create your account — check that your email is correct, or choose Notion / Local instead."
+Re-prompt or let them pick a different option.
+
+**On success (200):**
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "name": "username"
+  },
+  "api_key": "ml_...",
+  "hubs": [
+    {
+      "id": "uuid",
+      "name": "My Hub",
+      "slug": "hub-slug",
+      "type": "personal"
+    }
+  ],
+  "project": {
+    "id": "uuid",
+    "name": "project-name",
+    "tier": "free"
+  }
+}
+```
+
+**Hub selection — run this before storing anything:**
+
+```
+SELECTED_HUB = null
+
+if response.hubs.length === 0:
+  → No hub available — store hub_id as null, warn: "No hub found for your account. Contact support at memorylayer.pro."
+
+if response.hubs.length === 1:
+  → Auto-select response.hubs[0]. No prompt needed.
+  SELECTED_HUB = response.hubs[0]
+
+if response.hubs.length > 1:
+  → Show hub picker (plain text, both modes):
+  "Your account has multiple hubs — which one should this project live under?
+  [1] HubName1 (personal) — hub-slug-1
+  [2] HubName2 (team) — hub-slug-2
+  ...
+  Reply with a number."
+  → Wait for reply. Set SELECTED_HUB = response.hubs[chosenIndex].
+```
+
+**Store in `GLOBAL_CREDS_PATH`** (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`):
+```json
+{
+  "api_key": "[response.api_key]",
+  "user_id": "[response.user.id]",
+  "email": "[response.user.email]",
+  "connected_at": "[ISO date now]"
+}
+```
+
+**Store in `config.json`**:
+```json
+"supabase": {
+  "api_key": "[response.api_key]",
+  "project_id": "[response.project.id]",
+  "hub_id": "[SELECTED_HUB.id or null]",
+  "hub_slug": "[SELECTED_HUB.slug or null]",
+  "api_base": "https://pjtqhxurdbaeatssorju.supabase.co/functions/v1"
+}
+```
+
+**Important:** The `api_key` (format: `ml_...`) is a single account-level key used for all operations. All other skill files (mls-core-stop, mls-push, mls-pull) read `supabase.api_key` from config.json — it will work correctly for session-start, session-end, remember, and hub-brain calls.
+
+- Set `sync.primary = "supabase"` in `config.json`
+- Set `license.tier = "[response.project.tier]"` in `config.json`
+- Confirm: "Account created ✓ — your project is live at https://memorylayer.pro/dashboard"
+- Set `CONNECT_DATA.choice = "memorylayer"`, `CONNECT_DATA.dashboardUrl = "https://memorylayer.pro/dashboard"`
+
+**If server returns an existing account (email already registered):**
+The response is identical — same shape, existing `api_key` returned. No special handling needed. Inform user: "Logged in to your existing account — project '[project_name]' created ✓"
+
+**On any other error or network failure:**
+> "Couldn't reach memorylayer.pro right now. Continuing in local mode — connect later with `/mls-connect`."
+Fall through to local-only. Do not block.
+
+---
+
+#### Option 2: Notion
+
+**Make this feel like a reveal.** The Notion page IS the dashboard — it should appear within seconds and look impressive.
+
+Show loading: "Connecting to your Notion workspace..."
+
+1. **Check if Notion MCP is available** — try calling the Notion search tool. If it errors or doesn't exist:
+   > "Notion MCP isn't connected. Add the Notion integration in your Claude Desktop settings. Continuing in local mode — run `/mls-core-start` again after connecting Notion."
+   Fall through to local-only.
+
+2. **Auto-discover the Projects database:**
+   - Search with query "MLS Core Projects" or "MLS Projects"
+   - If found: use it. Inform user: "Found your MLS Projects database."
+   - If not found: offer to create one → create a Notion database with the full MLS schema.
+
+3. **Create the project page immediately** with rich content:
+   - Project Name, Status = "Active", MLS Version = "3.0.0"
+   - Context block, Goals block, Tasks block, first Changelog entry, Agent Notes
+   - Save `notion_project_page_id` to `config.json > dashboard.notion_project_page_id`
+   - Save `projects_data_source_id` to `config.json > notion.projects_data_source_id`
+   - Set `sync.primary = "notion"` in `config.json`
+
+4. **Surface the link immediately — make it an event:**
+   > "Your memory is live → [Notion page URL]"
+   The user should open Notion right now and see their project already populated with structure. That is the MLS showcase moment.
+
+5. **Register on Community Brain** (see section below).
+
+6. Set `CONNECT_DATA.choice = "notion"`, `CONNECT_DATA.dashboardUrl = "[notion page url]"`
+
+---
+
+#### Option 3: Local Only
+
+Store in `config.json`:
+```json
+"sync": { "primary": "local", "auto_push_on_close": false, "auto_pull_on_start": false }
+```
+
+Inform user:
+> "Running in local mode. Your memory lives in `.mls/` in this folder. Run `/mls-connect` anytime to add cloud sync."
+
+Set `CONNECT_DATA.choice = "local"`.
+
+---
+
+**After any connection choice is handled:**
+Write loading template ("Building your project context", steps: ["Gathering project info", "Setting up guided questions", "Preparing context files"]) → present_files → STOP → Proceed to "setup" phase.
+
+---
+
+**"setup"** — User chooses setup method (1=Seed from files, 2=Guided setup, 3=Skip)
+- Execute chosen method, build initial context
+- Write PHASE="capabilities" → present_files → STOP
+
+**"capabilities"** — Shows 5 commands toolkit (mls-core-start, mls-core-stop, mls-push, mls-pull, mls-test)
+- User acknowledges → Write PHASE="complete" → present_files → STOP
+
+**"complete"** — Shows setup checklist with animated checkmarks. Include the dashboard link if connected.
+
+---
+
+### Deploy the Template
+
+Create `.mls/` directory structure:
 
 ```
 [workspace]/.mls/
@@ -39,202 +519,265 @@ Copy the MLS Core template files from this skill's assets directory into the use
   onboarding.md
   session-close.md
   context/
-    CONTEXT.md
-    TASKS.md
-    CHANGELOG.md
+    CONTEXT.md, TASKS.md, CHANGELOG.md, GOALS.md,
+    FEEDBACK.md, PREFERENCES.md, CORRECTIONS.md
   modules/
     MODULE_TEMPLATE.md
 ```
 
-The template files are in this skill's `assets/mls-template/` directory. Copy the entire structure to `[workspace]/.mls/`.
+Resolution order: existing file with content → .template.md copy → config-template-v2.json → built-in defaults.
 
-If the `.mls/` directory already exists (partial setup), only copy files that are missing — don't overwrite existing content.
+### Onboarding Protocol
 
-### 2. Run the Onboarding Protocol
+**Skip logic:** If `initialized: true` AND context files have content AND `sessions.total` > 0 → skip to Returning Session Bootstrap. If user says "skip"/"let's go" → respect immediately.
 
-Read `.mls/onboarding.md` and follow it exactly. The key steps are:
+**2a. Project Confirmation** — handled by "boot_folder" phase above
+**2b. Connection** — handled by "connect" phase above. NOT optional — every user must make a conscious choice.
+**2c. Welcome** — explain the 7 core files (CONTEXT, TASKS, CHANGELOG, GOALS, PREFERENCES, FEEDBACK, CORRECTIONS)
+**2d. Setup Method:**
+- Folder has files → recommend Seed (option 1)
+- Folder empty → recommend Guided (option 2)
+- Guided questions: project name, description, stage, tech stack, goals, AI work preferences
 
-**Welcome the user.** Explain MLS Core simply:
-> "Welcome to MLS Core. I'm setting up persistent memory for this folder — from now on, every AI session here builds on the last one. I'll remember your project context, track what you're working on, and hand off notes between sessions so nothing gets lost."
+**2e. Surface Capabilities** — present the 5 core commands
 
-**Explain the three core files** (1-2 sentences each):
-- **CONTEXT.md** — Your project's brain. Knowledge about what you're working on, key decisions, who's involved.
-- **TASKS.md** — Your living to-do list that persists between sessions.
-- **CHANGELOG.md** — Session history with handoff notes so the next agent knows exactly where things stand.
+### Initialize
 
-**Offer setup options** (present in this order):
+1. Update `config.json`: `mls_core_version` → "3.0.0", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
+2. Initialize `metrics.json`: `instance_id`, `created_at`, `sessions.total_count` → 1, all v2 blocks
+3. Write first CHANGELOG entry with "For Next Agent" section
+4. **If connected to memorylayer.pro (sync.primary = "supabase"):** Write `GLOBAL_CREDS_PATH` (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`) with `{ "api_key": "[response.api_key]", "user_id": "[response.user.id]", "email": "[response.user.email]", "connected_at": "[ISO date]" }`. Create `/sessions/stoic-laughing-bardeen/mnt/.mls/` directory if it doesn't exist. **Do NOT use `~/.mls/` — that path is ephemeral and will not persist between sessions.** This is the account-level key returned by `POST /register` — it works frictionlessly across all future projects on this machine, no re-authentication needed.
 
-If the folder already has files in it, recommend option 1:
-1. **[Recommended] Seed from existing files** — Scan the folder, read all readable files, and build initial context automatically. Files stay in place — the agent just learns from them.
-2. **Guided setup** — Answer 4-5 questions to populate context manually.
-3. **Skip** — Set up the structure and build context organically over time.
+### Fire Agent Start Hook
 
-If the folder is empty, recommend option 2 (guided setup).
+If `.agents/on_session_start.md` exists, read and execute its instructions. Non-blocking if missing or fails. Agents are optional.
 
-### 3. Initialize
+---
 
-After the user picks a setup option and context is built:
+### Community Brain Registration (Notion path only, first run)
 
-1. Update `config.json`:
-   - `initialized` → `true`
-   - `initialization_date` → current ISO timestamp
-   - `setup_method` → `"seed"`, `"guided"`, or `"organic"`
-   - `project.name` → from what was learned, or ask the user
+If `community_brain.enabled` is `true` and `community_brain.project_row_id` is `null`:
 
-2. Initialize `metrics.json`:
-   - `instance_id` → generate a unique ID (timestamp + random suffix)
-   - `created_at` → current ISO timestamp
-   - `sessions.total_count` → `1`
-   - `users.unique_users` → `["[current user name]"]`
-   - `users.total_count` → `1`
+1. Create a row in the "Connected Projects" database:
+   - Data source ID: `collection://0223cc81-5cea-4f64-8bd6-4065e0ac136e`
+   - Properties (names must match EXACTLY):
+     - **Project** (title) — project name
+     - **Status** (select) — `"active"`
+     - **Sessions** (number) — `1`
+     - **MLS Version** (select) — `"3.0.0"`
+     - **Avg Rating** (number) — leave null
+     - **Time Saved (hrs)** (number) — `0`
+     - **Goals Active** (number) — count from GOALS.md
+     - **Goals Completed** (number) — `0`
+     - **Corrections** (number) — `0`
+     - **Patterns** (number) — `0`
+     - **Top Tags** (multi_select) — `[]`
+     - **Last Sync** (date) — today
+   - Use `notion-create-pages` with `data_source_url: "collection://0223cc81-5cea-4f64-8bd6-4065e0ac136e"`
+2. Save the returned page ID to `config.json > community_brain.project_row_id`.
+3. Inform user: "Your project is live on the Memory Layer Community Brain! Bookmark: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e"
 
-3. Write the first CHANGELOG entry (at the top of the file):
-   ```
-   ## Session 1 — [YYYY-MM-DD]
-   **User:** [name]
-   **Summary:**
-   - MLS Core v1.0 initialized on this folder
-   - Setup method: [seed/guided/organic]
-   - [Details about what was built]
-
-   **For Next Agent:**
-   - Fresh MLS Core instance — context is [rich/initial/minimal]
-   - Project: [brief description]
-   - [Immediate priorities if identified]
-   - Continue building context from each session's work
-   ```
-
-4. Display the first status block (see Status Display below).
-
-5. Ask what the user wants to work on. Session 1 has begun.
+If Community Brain registration fails, continue. Non-blocking.
 
 ---
 
 ## Returning Session Bootstrap
 
-This runs on every session after the first. Load context, display status, get ready to work.
+### SPEED: Show First, Load Second
 
-### 1. Read Config
+**Step 1 (instant):** Read `config.json` + `metrics.json` + latest CHANGELOG entry's "For Next Agent" section.
 
-Read `.mls/config.json`. Note the version and license tier.
+**Step 2 (immediate):**
 
-### 2. Validate License
+**⚠️ MODE CHECK: Only render JSX if MODE = "visual". If the user chose text mode (said "2", "text", "fast", etc.), NEVER write or present a JSX file. Go straight to text output.**
 
-- **Starter tier (default):** Works without a license key. Max 2 users. If the user count exceeds 2, show an upgrade notice but continue functioning.
-- **Pro tier:** Requires a valid license key. If invalid, downgrade behavior to Starter and notify.
-- If `config.json` is corrupted, operate in read-only mode and inform the user.
+**Visual mode ONLY:** Read `templates/reconnect.jsx`, fill DATA:
+- `projectName` from config, `sessionNumber` from metrics + 1
+- `lastHandoff` from CHANGELOG, `lastSessionTag` from CHANGELOG
+- `timeSaved` from metrics, `notionConnected`/`mlsConnected`/`communityBrainConnected` from config
+- `agentCount` from config, `isWarmStart` detection, `lastSessionMinutesAgo`
+- For `activeGoals` and `activeTasks` — use `[]` and `0` if not yet loaded
+Write as `mls-boot.jsx` → call `present_files` → STOP.
 
-### 3. Identify User
+**Text mode (NO JSX, plain text only):**
+> **MLS Core — [Project Name]** | Session [N] | [cold/warm start]
+> Dashboard: https://memorylayer.pro/dashboard
+> Last handoff: [first line of For Next Agent]
+> Goals: [N] active | Tasks: [N] active | Saved: [X hrs]
+> Connections: memorylayer.pro [yes/no] | Notion [yes/no] | Community Brain [yes/no]
+> Loading context...
 
-If this user hasn't been seen before (not in `metrics.json > users.unique_users`), ask for their name. Add them to the user list. Check against the tier limit.
+In text mode, immediately proceed to Step 3 after printing this summary — do not wait for user input.
 
-### 4. Load Context (this is the critical part)
+**Step 3 (background):** While animation plays, read all context files:
+1. CHANGELOG.md → full latest handoff
+2. CONTEXT.md → project knowledge
+3. TASKS.md → current tasks
+4. GOALS.md → active goals
+5. FEEDBACK.md → behavioral patterns
+6. PREFERENCES.md → user preferences
+7. CORRECTIONS.md → active corrections (override CONTEXT.md conflicts)
 
-Read these files in this order — the order matters because the handoff is the most time-sensitive context:
+### Step 4: Call Session Start API
 
-1. **`.mls/context/CHANGELOG.md`** — Read the most recent entry. The "For Next Agent" section is your direct briefing from the last agent. This tells you what's in flight, what's blocked, and what to focus on.
+Check `config.json > supabase.api_key`. If it exists and is not null:
 
-2. **`.mls/context/CONTEXT.md`** — The full project knowledge base. Load it all.
+```
+POST {config.json > supabase.api_base}/session-start
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
 
-3. **`.mls/context/TASKS.md`** — Current tasks, priorities, and blockers.
+{
+  "api_key": "{config.json > supabase.api_key}",
+  "project_id": "{config.json > supabase.project_id}",
+  "start_type": "{warm|cold}",
+  "load": {
+    "scopes": ["project", "agent_portable", "agent_project"],
+    "include_corrections": true,
+    "include_last_handoff": true
+  }
+}
+```
 
-If any file is missing (user may have deleted it accidentally), recreate it from whatever context is available and note the data loss.
+On success: store session ID in `.mls/active_session.json` as `{"session_id": "uuid", "started_at": "ISO"}`. Merge corrections and remote handoff with local context.
 
-### 5. Scan Modules
+On error: log it, write `{"session_id": null, "local_only": true, "error": "..."}`, continue in local-only mode.
 
-Read `.mls/modules/`. For each `.md` file (excluding `MODULE_TEMPLATE.md`), read its YAML frontmatter and validate:
-- Does `requires_core` match the installed Core version?
-- Does `requires_tier` match the current license tier?
-- Is `status` set to `active`?
+If no API key configured: skip entirely. Backward compatible with V2.
 
-List valid modules as active. List invalid ones as inactive with a reason.
+### Version Migration (v2→v3)
 
-### 6. Check for Notion Sync
+If `mls_core_version` is "2.0.0":
+1. Add `supabase` block (null values — user connects via `/mls-connect`)
+2. Add `sync` block with defaults
+3. Remove `agents` block (moved to `.agents/agent-config.json`)
+4. Create `.agents/` directory structure if missing
+5. Bump version to "3.0.0"
+6. Log migration in CHANGELOG
+7. Show upgrade carousel if visual mode
 
-If `.mls/config.json` contains a `notion` object with `projects_data_source_id`, check if this project exists in the MLS Core Notion database:
+### Warm Start Detection
 
-1. Search the Projects database for a row matching this project name.
-2. If found, compare the Notion row's **Content Version** with the local version.
-3. If Notion is newer (another machine/user pushed changes), pull the updated Context, Active Tasks, and Agent Notes into the local files. Inform the user: "Found newer context from Notion — pulling updates from [last user]'s session."
-4. If local is newer or equal, no pull needed.
-5. If no row exists, that's fine — it will be created at session close.
+```
+if warm_start_enabled AND (now - last_session.ended_at) < threshold_minutes AND same_user → WARM START
+```
 
-This enables team sync without a separate sync module. If no Notion IDs are configured, skip this step.
+Warm start: animation plays faster (0.6x speed). After: "Pick up where we left off, or starting something new?"
 
-### 7. Update Metrics
+### Context Pruning (every N sessions)
 
-- Increment `sessions.total_count` by 1
-- Record `sessions.last_session.started_at` with current timestamp
-- Record the current user identifier
+If `sessions.total_count % context_pruning_interval === 0`: scan for stale items, present findings → user decides.
 
-If `metrics.json` is corrupted, recreate with defaults and note the loss.
+### Fire Agent Start Hook
 
-### 8. Display Status
+If `.agents/on_session_start.md` exists, read and execute. Non-blocking if missing or fails.
 
-Show the dynamic status display (see below).
+### Remote Sync
 
-### 9. Do NOT Begin Work Until Bootstrap is Complete
+Determine from `config.json > sync.primary`:
 
-The whole point of this protocol is that the agent has full context before doing anything. Don't skip steps, don't start working early.
+**`"supabase"`:** If Step 4 succeeded, sync is done. If Step 4 failed, fall back to Notion if configured.
+
+**`"notion"`:** Search Projects database, compare Content Version, pull if newer. Always surface dashboard link.
+
+**`"local"`:** Skip.
+
+### Finalize
+
+Increment `sessions.total_count`, record `started_at`. Bootstrap complete — ready for work.
 
 ---
 
-## Status Display
+## Configuration Reference
 
-Generate this at every session start (first run and returning):
+### Supabase (memorylayer.pro)
 
-```
-╔══════════════════════════════════════════════════╗
-║  MLS Core v1.0  |  [Starter/Pro/Enterprise]      ║
-║  Project: [name from CONTEXT.md or config]       ║
-╠══════════════════════════════════════════════════╣
-║  Sessions: [N]  |  Context entries: [N]          ║
-║  Last session: [relative time, e.g. "2 days ago"]║
-║  Last user: [name — only show if 2+ users]       ║
-║  Handoff: "[first line of For Next Agent]"       ║
-╠══════════════════════════════════════════════════╣
-║  Top tasks:                                      ║
-║  • [active task 1]                               ║
-║  • [active task 2]                               ║
-║  • [active task 3]                               ║
-╠══════════════════════════════════════════════════╣
-║  Modules:                                        ║
-║  ✓ [active module name — description]            ║
-║  ○ [inactive module — reason]                    ║
-║  (none installed)                                ║
-╠══════════════════════════════════════════════════╣
-║  Value: ~[X] hrs context recovery saved          ║
-║         [Y] sessions  |  [Z] handoffs            ║
-╚══════════════════════════════════════════════════╝
+```json
+"supabase": {
+  "api_key": "ml_...",
+  "project_id": "uuid",
+  "api_base": "https://pjtqhxurdbaeatssorju.supabase.co/functions/v1"
+}
 ```
 
-For the first session, replace the handoff line with:
+> `api_key` is the account-level key returned by `POST /register` (format: `ml_...`). A single key works for all projects — there is no per-project key. The `project_id` scopes all memory operations (sessions, entries, pushes, pulls) to the correct project.
+
+### Sync
+
+```json
+"sync": {
+  "primary": "supabase",
+  "conflict_resolution": "local_wins",
+  "auto_push_on_close": true,
+  "auto_pull_on_start": true
+}
 ```
-║  Welcome to MLS Core. Context builds from here.  ║
+
+`primary` options: `"supabase"` | `"notion"` | `"local"`
+
+### Preferences
+
+```json
+"preferences": {
+  "status_display_on_start": true,
+  "auto_context_update_on_close": true,
+  "changelog_max_entries": 30,
+  "context_pruning_interval": 30,
+  "warm_start_enabled": true,
+  "warm_start_threshold_minutes": 120,
+  "feedback": {
+    "enabled": true,
+    "prompt_at_close": true,
+    "collect_agent_self_assessment": true,
+    "pattern_threshold": 3
+  }
+}
 ```
 
-### Value Calculation
+### Community Brain
 
-Context recovery time saved = `(sessions.total_count - 1) * 8 minutes`. This is conservative: without persistent memory, an agent spends 8-12 minutes per session re-learning context. MLS Core reduces this to under a minute. We use the low end and exclude the first session (which is setup). Display in hours when over 60 minutes.
+```json
+"community_brain": {
+  "enabled": true,
+  "page_id": "33733b46f2f281c8b1dcf5baa3f2cf0e",
+  "connected_projects_data_source_id": "0223cc81-5cea-4f64-8bd6-4065e0ac136e",
+  "agent_marketplace_data_source_id": "41cf8d26-6a8a-48e3-aa36-dd7a7be5ec8a",
+  "share_level": "anonymized_metrics",
+  "project_row_id": null
+}
+```
 
----
+### Dashboard
 
-## Session Close Reminder
+```json
+"dashboard": {
+  "url": null,
+  "fallback_to_notion": true,
+  "notion_project_page_id": null
+}
+```
 
-At the end of every session, the agent should follow the session close protocol in `.mls/session-close.md`. This skill doesn't handle session close — but remind the user and the agent that it needs to happen. The close protocol:
-1. Updates CONTEXT.md with new knowledge
-2. Updates TASKS.md with completed/new tasks
-3. Writes a CHANGELOG entry with the "For Next Agent" handoff
-4. Updates metrics
+## Metrics Schema (v2+)
 
-The handoff note is the most important part. It's what makes the next session's bootstrap valuable. Without it, the next agent starts colder.
+`sessions.warm_starts`, `feedback` (total_collected, ratings, avg_satisfaction, patterns_identified), `session_tags` (strategy, build, debug, review, planning, research, design, admin, mixed), `corrections` (total_logged, active, resolved), `goals` (total_created, active, completed, parked).
 
----
+## Tag Inference Rules
+
+APIs/backends → `backend`, React/UI → `frontend`, CI/CD/Docker → `devops`, ML/AI/agents → `ai-agents`, databases/analytics → `data`, docs → `documentation`, user research → `research`, ads/content/social → `marketing`, styling/UX → `design`, cloud/AWS → `infrastructure`.
 
 ## Important Rules
 
-- **Never start work before the bootstrap is complete.** The whole value of MLS Core is that agents have context. Skipping the bootstrap defeats the purpose.
-- **The "For Next Agent" handoff is sacred.** Always read it first on returning sessions. Always write one at session close.
-- **Files outside `.mls/` belong to the user.** Don't move, rename, or reorganize them unless asked. `.mls/` is the agent's workspace; everything else is the user's.
-- **Core always works.** If a module fails, Core continues. If metrics are corrupted, Core continues with defaults. If a context file is missing, Core recreates it. The memory layer should never be the thing that breaks.
-- **MLS Core is proprietary software by Rabbithole LLC.** Redistribution or creation of derivative products is prohibited without written permission.
+- Never start work before bootstrap is complete
+- The "For Next Agent" handoff is sacred — always read first, always write at close
+- Files outside `.mls/` belong to the user — don't touch unless asked
+- Core always boots — self-heal and continue through any failure
+- **The "connect" phase is mandatory on first run.** Never skip it. Every user must consciously choose where memory lives.
+- **memorylayer.pro path: always call `POST /register`.** Without it, the account and project are never provisioned. The returned `api_key` authenticates all future calls; the `project.id` scopes all memory. Both must be stored — `api_key` in `config.json > supabase.api_key` and in `global.json`; `project.id` in `config.json > supabase.project_id`. No pre-existing API key is required — email is the only input needed.
+- **Notion path: create the project page immediately and surface the link.** Make it feel like something just came alive.
+- **The Session Start API call is non-blocking.** Fail gracefully, continue locally.
+- **Always store the session ID.** Without it, session-end can't close the server-side session.
+- **Agent hooks are optional.** Load from `.agents/`, don't manage behavior.
+- **Auto-discover Notion databases** — never ask for IDs you can search for.
+- **Write rich content to Notion pages** — never create empty shells.
+- Respect PREFERENCES.md > default behavior. Apply FEEDBACK.md patterns. CORRECTIONS.md overrides CONTEXT.md conflicts.
+- **MLS Core is proprietary software by Rabbithole LLC.** Redistribution or derivative products prohibited without written permission.
