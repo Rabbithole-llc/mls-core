@@ -5,7 +5,7 @@ description: "Manage MLS agents from the Agent Marketplace and local packages. B
 
 # MLS Agents — Agent Marketplace & Package Manager
 
-You are the agent manager for MLS Core. You discover agents from the **Agent Marketplace** and local packages, then install and remove agent skills from MLS Core-enabled projects. You read skill manifests, check tier compatibility, and validate the install.
+You are the agent manager for MLS Core. You discover agents from the **Agent Marketplace** (served by Supabase) and local packages, then install and remove agent skills from MLS Core-enabled projects. You read skill manifests, check tier compatibility, and validate the install.
 
 **You are the bridge between "here's an agent I want" and "agents are live in my project."**
 
@@ -55,8 +55,20 @@ Before doing anything, verify:
 
 1. **MLS Core is initialized** — `.mls/config.json` exists and `initialized: true`
    - If not: "This folder doesn't have MLS Core set up yet. Run `/mls-core-start` first to initialize, then come back to install agents."
-2. **Agent dispatch exists** — `agent-dispatch-SKILL.md` exists in the project root or `.claude/skills/`
+2. **Supabase credentials exist** — `.mls/config.json > supabase.api_key` and `supabase.project_id` are set
+   - If missing: agent marketplace install is unavailable. Discovery (browse) still works without auth.
+3. **Agent dispatch exists** — `agent-dispatch-SKILL.md` exists in the project root or `.claude/skills/`
    - If not: note it as something to install (it's in the manifest's `shared_resources`)
+
+Read these values from `.mls/config.json`:
+- `SUPABASE_API_KEY` = `supabase.api_key`
+- `SUPABASE_PROJECT_ID` = `supabase.project_id`
+- `MLS_API_BASE` = `supabase.api_base` (default: `https://pjtqhxurdbaeatssorju.supabase.co/functions/v1`)
+
+Supabase anon key (for Authorization header on all requests):
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+```
 
 ---
 
@@ -64,12 +76,47 @@ Before doing anything, verify:
 
 ### 1. Agent Marketplace (Primary)
 
-The Community Brain's agent catalog lives in a Notion database at data source ID `41cf8d26-6a8a-48e3-aa36-dd7a7be5ec8a`. This is the primary discovery mechanism.
+The Agent Marketplace is served by the `marketplace-agents` Supabase edge function.
 
 **To query the marketplace:**
-- Use Notion MCP (`mcp__4f0edf40-f770-4f83-a1ef-ff287c7ce8c0__notion-search`) to search the database
-- Fields available: Name, Status, Category, Description, Installs (count), Avg Rating, Install Command, Dependencies
-- Show agents with their metadata and mark already-installed agents with `✓`
+
+```
+GET {MLS_API_BASE}/marketplace-agents?sort=installs&limit=20
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+```
+
+Optional query params:
+- `category=<ops|content|dev|data|custom>` — filter by category
+- `search=<text>` — fuzzy name search
+- `sort=installs|rating|name` — default `installs`
+- `limit=<n>` — max 100, default 20
+- `offset=<n>` — for pagination
+
+Response:
+```json
+{
+  "agents": [
+    {
+      "id": "uuid",
+      "name": "Daily Briefing",
+      "slug": "daily-briefing",
+      "description": "...",
+      "category": "ops",
+      "tier_required": "free",
+      "rating": 4.8,
+      "install_count": 127,
+      "version": "1.0.0",
+      "required_connections": []
+    }
+  ],
+  "count": 16,
+  "limit": 20,
+  "offset": 0,
+  "sort": "installs"
+}
+```
+
+Show agents with their metadata. Mark already-installed agents with `✓`.
 
 ### 2. Local skill-manifest.json (Secondary/Fallback)
 
@@ -79,10 +126,10 @@ Look for `skill-manifest.json` in this order:
 2. **A path the user provides** — "install agents from /path/to/mls-agents"
 3. **A URL the user provides** — "install from github.com/org/mls-agents" (fetch and parse)
 
-If no manifest is found and Notion isn't connected:
-> "I can't find a skill-manifest.json and the Agent Marketplace isn't available. To install agents, I need either:
+If no manifest is found and marketplace is unavailable:
+> "I can't reach the Agent Marketplace and there's no local skill-manifest.json. To install agents, I need either:
+> - A working memorylayer.pro connection (run `/mls-core-start` and connect)
 > - The mls-agents package in this folder (drop the `mls-agents/` folder here)
-> - A path to the package: 'install agents from /path/to/mls-agents'
 >
 > Don't have the package yet? Ask your admin for the mls-agents folder or repo URL."
 
@@ -94,41 +141,40 @@ If no manifest is found and Notion isn't connected:
 
 **Primary flow:**
 
-1. **Try Notion marketplace first** — Query data source `41cf8d26-6a8a-48e3-aa36-dd7a7be5ec8a` for all agent entries
-2. **Display marketplace agents** with:
-   - Agent name, Status (Active/Beta/Archived), Category
+1. **Call the marketplace GET endpoint** (see Agent Discovery above)
+2. **Display agents** with:
+   - Agent name, Category, Tier required
    - Description
-   - Installs count and Avg Rating
+   - Installs count and Rating
    - Mark agents already installed locally with `✓ installed`
 
 Example output:
 ```
-Agent Marketplace — MLS Community Brain
+Agent Marketplace — memorylayer.pro
 
-  ✓ Social Media Manager
-    Status: Active | Category: Analytics & Growth
-    Analytics, engagement tracking, growth strategy
-    Installs: 1,247 | Rating: ★★★★☆ (4.6/5)
-    Install: install "Social Media Manager"
+  ✓ Daily Briefing
+    Category: Ops | Tier: Free
+    Runs a morning briefing at session start — tasks, goals, pending items.
+    Installs: 127 | Rating: ★★★★★ (4.8/5)
 
-  Content Creator
-    Status: Active | Category: Content
-    Scripts, captions, hooks, content calendars
-    Installs: 892 | Rating: ★★★★☆ (4.4/5)
-    Install: install "Content Creator"
+  Email Intelligence
+    Category: Ops | Tier: Free
+    Monitors inbox patterns, surfaces action items, drafts replies.
+    Installs: 89 | Rating: ★★★★★ (4.6/5)
+    Install: install "Email Intelligence"
 
-  Workflow Creator
-    Status: Beta | Category: Utilities
-    Builds n8n automations from plain English
-    Installs: 156 | Rating: ★★★★☆ (4.7/5)
-    Install: install "Workflow Creator"
+  Code Standards
+    Category: Dev | Tier: Free
+    Enforces code style, catches anti-patterns, reviews PRs.
+    Installs: 64 | Rating: ★★★★☆ (4.3/5)
+    Install: install "Code Standards"
 
-🧠 Browse more agents: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e
+Browse all agents: https://memorylayer.pro/dashboard/agents
 ```
 
 **Fallback flow:**
 
-- If Notion isn't connected, read `skill-manifest.json` and display available agents:
+- If marketplace is unreachable, read `skill-manifest.json` and display available agents:
 
 ```
 Available MLS Agents (from [package name] v[version]):
@@ -139,20 +185,9 @@ Available MLS Agents (from [package name] v[version]):
   ● Content Creator — Scripts, captions, hooks, content calendars
     Type: agent | Workflows: content-publisher.js
 
-  ● Ad Manager — Paid advertising across Meta and Google
-    Type: agent | Workflows: ad-performance-tracker.js
-
-  ● Workflow Creator — Builds n8n automations from plain English
-    Type: utility | Workflows: credential-wizard.js
-
-  ● Content Pipeline — Analyze → Create sequential flow
-    Type: hub | Requires: Social Media Manager + Content Creator
-
 Install modes:
   full          — All agents + hub + workflows + onboarding
   content_only  — Content Creator + Workflow Creator
-  analytics_only — Social Media Manager + Workflow Creator
-  ads_only      — Ad Manager + Workflow Creator
 
 Say "install [agent name]" or "install full" to get started.
 ```
@@ -163,7 +198,7 @@ Mark agents that are already installed with `✓ installed` next to them.
 
 **Single agent install:**
 
-1. **Find the agent** — Search marketplace first (via Notion), then local manifest by name (fuzzy match OK — "social media" matches "social-media-manager")
+1. **Find the agent** — search marketplace first (GET with `?search=<name>`), then local manifest by name (fuzzy match OK)
 2. **Check dependencies** — if the agent has dependencies, verify those are installed or offer to install them too:
    > "Content Pipeline requires Social Media Manager and Content Creator. Want me to install all three?"
 3. **Check if already installed** — look in `.mls/config.json > agents.installed_modules` for a matching entry
@@ -188,16 +223,24 @@ Mark agents that are already installed with `✓ installed` next to them.
    f. **Set `agents.enabled: true`** if not already
    g. **Set `agents.trigger_dispatch_version: "1.0.0"`** if not already
 
-5. **Sync to platform** — call the `sync_agent_install` MCP tool so the agent appears in the hub dashboard:
-   - `agent_slug`: the manifest's `slug` field (kebab-case)
-   - `agent_name`: the manifest's display name
-   - `agent_version`: from manifest (default `"1.0.0"`)
-   - `description`: from manifest
-   - `category`: map manifest category to one of: `content` / `analytics` / `ops` / `dev` / `custom`
-   - `is_custom`: `false` for marketplace agents, `true` for user-defined agents
-   - `visible_to_hub`: default `false` (user can set `true` to share with teammates)
-   - **Non-blocking**: if the MCP call fails, do NOT abort the install. Surface a soft warning:
-     > "⚠️ Platform sync failed — agent installed locally but won't appear in the dashboard yet. Check your MEMORY_LAYER_API_KEY or retry with `/mls-push`."
+5. **Sync to platform** — call the `agent-install` edge function to register the install in Supabase:
+
+   ```
+   POST {MLS_API_BASE}/agent-install
+   Content-Type: application/json
+   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+
+   {
+     "api_key": "[SUPABASE_API_KEY]",
+     "project_id": "[SUPABASE_PROJECT_ID]",
+     "agent_id": "[agent.id from marketplace GET response]"
+   }
+   ```
+
+   On success: store `installation_id` in the config entry.
+
+   **Non-blocking**: if the call fails (network error, no api_key configured), do NOT abort the install. Surface a soft warning:
+   > "⚠️ Platform sync failed — agent installed locally but won't appear in the dashboard yet. Check your memorylayer.pro connection or retry with `/mls-push`."
 
 6. **Validate the install** — run the validation checks (see mls-test protocol):
    - Skill file exists at expected path
@@ -206,23 +249,17 @@ Mark agents that are already installed with `✓ installed` next to them.
    - Memory directory exists
    - Config entry is present and well-formed
 
-7. **Update Agent Marketplace** (if the agent came from Notion):
-   - Query the agent's Notion page in data source `41cf8d26-6a8a-48e3-aa36-dd7a7be5ec8a`
-   - Increment the "Installs" count by 1
-   - Use Notion MCP `update_data_source` to save the change
-
-8. **Report:**
-   > "✓ Social Media Manager installed successfully.
+7. **Report:**
+   > "✓ Daily Briefing installed successfully.
    >
-   >   Skill: skills/social-media-manager/SKILL.md
-   >   Module: .mls/modules/social-media-manager.md
-   >   Memory: .mls/modules/social-media-manager/
-   >   Workflow: n8n-workflows/social-media-analytics-collector.js
-   >   Dashboard: synced to hub ✓
+   >   Skill: skills/daily-briefing/SKILL.md
+   >   Module: .mls/modules/daily-briefing.md
+   >   Memory: .mls/modules/daily-briefing/
+   >   Dashboard: synced to memorylayer.pro ✓
    >
-   >   🧠 Browse more agents: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e
+   >   Browse more agents: https://memorylayer.pro/dashboard/agents
    >
-   > Say 'run social media manager' to activate it."
+   > Say 'run daily briefing' to activate it."
 
 ### "install full" / "install all" / "install [mode name]"
 
@@ -247,7 +284,7 @@ Mark agents that are already installed with `✓ installed` next to them.
    >   ✓ onboarding.jsx
    >   ✓ config-template-v2.json
    >
-   >   🧠 Browse more agents: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e
+   >   Browse more agents: https://memorylayer.pro/dashboard/agents
    >
    > Run `/mls-core-start` to discover and register all agents.
    > Or say 'run [agent name]' to activate one now."
@@ -266,8 +303,6 @@ Mark agents that are already installed with `✓ installed` next to them.
    > - Delete .mls/modules/social-media-manager.md
    > - Keep .mls/modules/social-media-manager/ (your accumulated preferences and data)
    > - Remove from config.json
-   >
-   >   🧠 Browse more agents: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e
    >
    > Your agent memory (preferences, reports, KPIs) is preserved. Reinstalling later will pick it up.
    >
@@ -306,12 +341,13 @@ When installing the first agent (or on full install), also check for and install
 
 | Error | Response |
 |---|---|
-| Marketplace unavailable + no manifest | Guide user to obtain the mls-agents package |
+| Marketplace unreachable + no manifest | Guide user to check connection and obtain the mls-agents package |
 | Skill file missing in package | "The package is incomplete — [file] is missing. Re-download or contact the package author." |
 | Config.json write fails | "Couldn't update config. Check if .mls/config.json exists and is valid JSON." |
 | Agent already installed | Offer reinstall or skip |
 | Dependency not installed | Offer to install dependencies first |
 | YAML parse error in module config | "The module config has invalid YAML. This is a package issue — contact the author." |
+| Platform sync 409 (already installed) | Non-fatal — already registered in Supabase. Continue normally. |
 
 ---
 
@@ -336,18 +372,37 @@ When the user says "done" or finishes managing agents:
 1. Summarize what was installed/removed this session
 2. If new agents were installed: "Say `/mls-core-start` to register new agents, or just say 'run [name]' to activate one now."
 3. **Run logging reminder** — remind the user (once per session) that agent runs can be logged to the platform:
-   > "Tip: when an agent completes a task, call `log_agent_run` with the agent slug and a short output_summary. Your hub teammates will see the run in the dashboard automatically."
+   > "Tip: when an agent completes a task, call the `agent-run` endpoint to log it. Your hub teammates will see the run in the dashboard automatically."
 4. Remove the `[Module: MLS Agents]` prefix and return to normal behavior
 
 ## Run Logging Protocol
 
-When any installed agent **completes a task** during the session (not just when managing agents), the agent dispatch or the agent itself should call `log_agent_run`:
+When any installed agent **completes a task** during the session, log it via the `agent-run` edge function:
 
-- `agent_slug`: the agent's kebab-case slug
-- `status`: `"completed"` on success, `"failed"` on error
-- `output_summary`: 1–2 sentence plain-text description of what was produced (e.g. "Generated 4-week Instagram content calendar with 28 posts for RabbitHole. Saved to .mls/modules/social-media-manager/calendars/april-2026.md")
-- `duration_ms`: approximate wall-clock time in milliseconds
-- `llm_provider`: which model was used (default: `"claude"`)
+```
+POST {MLS_API_BASE}/agent-run
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+
+{
+  "api_key": "[SUPABASE_API_KEY]",
+  "project_id": "[SUPABASE_PROJECT_ID]",
+  "installation_id": "[from config.json agents.installed_modules[n].installation_id]",
+  "status": "completed",
+  "output_summary": "1–2 sentence plain-text description of what was produced",
+  "duration_ms": 5000,
+  "llm_provider": "claude",
+  "memory_entries": [
+    {
+      "scope": "agent_project",
+      "memory_type": "run_output",
+      "agent_name": "[agent-slug]",
+      "content": { "summary": "..." },
+      "tags": ["[session-N]"]
+    }
+  ]
+}
+```
 
 This is how every local agent run becomes visible in the hub dashboard — enabling JRP and Austin (and any team member) to see what ran, when, and what it produced, without leaving the platform.
 

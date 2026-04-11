@@ -317,7 +317,7 @@ function AnimCheck({ visible, delay = 0 }) {
 }
 
 // ── Setup Complete ── (V3: added cloud sync + Supabase check)
-function SetupComplete({ t, projectName, notionConnected, communityBrainConnected, supabaseConnected }) {
+function SetupComplete({ t, projectName, communityBrainConnected, supabaseConnected }) {
   const [step, setStep] = useState(0);
   useEffect(() => {
     const timers = [
@@ -335,7 +335,6 @@ function SetupComplete({ t, projectName, notionConnected, communityBrainConnecte
     { label: "Project memory initialized", always: true },
     { label: "7 context files created", always: true },
     { label: "Cloud sync activated", always: supabaseConnected },
-    { label: "Notion dashboard created", always: notionConnected },
     { label: "Community Brain connected", always: communityBrainConnected },
     { label: "Session 1 is live", always: true },
   ].filter(c => c.always);
@@ -386,12 +385,7 @@ function ConnectOptions({ t }) {
       noAccountHint: "No account? Create one free at memorylayer.pro/signup",
     },
     {
-      num: "2", icon: "\u{1F4D3}", name: "Notion", tag: "Sync",
-      tagColor: "#818cf8", highlight: false,
-      desc: "Syncs to your Notion workspace. Context lives as a structured, searchable page.",
-    },
-    {
-      num: "3", icon: "\u{1F4BE}", name: "Local only", tag: "Private",
+      num: "2", icon: "\u{1F4BE}", name: "Local only", tag: "Private",
       tagColor: "rgba(255,255,255,0.35)", highlight: false,
       desc: "Memory stays on this machine. Fast, private, no account needed. Connect later with /mls-connect.",
     },
@@ -445,7 +439,6 @@ function ConnectOptions({ t }) {
 const PHASE = "__PHASE__"; // "connect" | "setup" | "capabilities" | "complete"
 const SETUP_DATA = {
   projectName: "__PROJECT_NAME__",
-  notionConnected: false,
   communityBrainConnected: false,
   supabaseConnected: false,
 };
@@ -458,7 +451,7 @@ export default function MLSBootFirstRun() {
       {PHASE === "connect" && <ConnectOptions t={t} />}
       {PHASE === "setup" && <SetupOptions t={t} isEmptyFolder={DATA.isEmptyFolder} />}
       {PHASE === "capabilities" && <Capabilities t={t} />}
-      {PHASE === "complete" && <SetupComplete t={t} projectName={SETUP_DATA.projectName} notionConnected={SETUP_DATA.notionConnected} communityBrainConnected={SETUP_DATA.communityBrainConnected} supabaseConnected={SETUP_DATA.supabaseConnected} />}
+      {PHASE === "complete" && <SetupComplete t={t} projectName={SETUP_DATA.projectName} communityBrainConnected={SETUP_DATA.communityBrainConnected} supabaseConnected={SETUP_DATA.supabaseConnected} />}
     </div>
   );
 }

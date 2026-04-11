@@ -3,7 +3,7 @@ name: mls-core-stop
 description: "Session close for MLS Core. Saves context, marks completed tasks, writes the 'For Next Agent' handoff, updates goals and metrics, syncs to remote. Trigger on /mls-core-stop, 'end session', 'wrap up', 'save and close', or 'write handoff'."
 ---
 
-# MLS Core V3 — Session Close
+# MLS Core V3.1 — Session Close
 
 You are running the MLS Core session close protocol. This is one of the most important moments in the MLS lifecycle — it's where you preserve everything this session accomplished so the next agent can pick up seamlessly.
 
@@ -287,8 +287,8 @@ Before attempting any Supabase call, check the global sync health state.
 
    | Status | Action |
    |---|---|
-   | `closed` | Proceed to Step 7 Supabase path normally |
-   | `open`, last_failure_at < 15 min ago | Skip Supabase → fall through to Notion or local-only |
+   | `closed` | Proceed to Step 7 normally |
+   | `open`, last_failure_at < 15 min ago | Skip Step 7 → local-only close |
    | `open`, last_failure_at ≥ 15 min ago | Flip to `half-open`, attempt one Supabase call as test |
    | `half-open` | Attempt once — success resets to `closed`, failure returns to `open` |
 
@@ -303,13 +303,13 @@ Before attempting any Supabase call, check the global sync health state.
 
 ### Tier Check Before Sync
 
-Read `config.json > license.tier` and `license.local_only`:
+Read `config.json > license.tier`:
 
-- **If `local_only` is `true`:** Skip all Supabase sync (no API key or API unreachable). Fall through to Notion if configured, otherwise complete the close with local files only. Surface once: "Session closed locally. Register at https://memorylayer.pro to enable cloud sync."
+- **If `supabase.api_key` is null:** Skip all sync. Surface once: "Session closed locally. Register at https://memorylayer.pro to enable cloud sync."
 - **If tier is `"free"`:** Supabase sync proceeds normally — free users get limited cloud sync (3 projects, 30-day history enforced server-side). Never send `hub_shared: true` — free users don't have community features. If the server rejects due to project/history limits, surface the error and continue with local files.
 - **If tier is `"pro"`:** Supabase sync proceeds with no limits. `hub_shared` stamped based on `hub.share_intelligence` setting.
 - **If tier is `"team"` or `"enterprise"`:** Include team-scoped memory updates in the sync payload if `.agents/memory/` contains team-scoped entries. Hub-scoped pool entries included.
-- **All tiers:** Local close (Steps 1-6) always completes regardless of sync outcome. Sync is a bonus, not a gate. Notion sync works for all tiers.
+- **All tiers:** Local close (Steps 1-6) always completes regardless of sync outcome. Sync is a bonus, not a gate.
 
 **hub_shared stamp** — determine once before building the session-end payload. Read live, never cache:
 ```
@@ -319,20 +319,14 @@ hub_id     = hub_shared ? config.json > hub.id : omit
 ```
 Apply `hub_shared` and `hub_id` to every memory_update entry in the session-end payload.
 
-Check `config.json > sync.primary` to determine the sync target.
-
-### If sync.primary = "supabase":
-
-Call the Memory Layer API to close the server-side session and push all updates.
-
-#### 7a. Read Active Session
+### 7a. Read Active Session
 
 Read `.mls/active_session.json` to get the session ID from the session-start API call.
 
-- If the file doesn't exist or `session_id` is null → the session was never registered server-side. Skip to Notion sync (7f) or local-only path.
-- If `local_only` is true → session-start failed, skip API call.
+- If the file doesn't exist or `session_id` is null → the session was never registered server-side. Skip to local-only path (Step 7e).
+- If `supabase.api_key` is null → skip API call.
 
-#### 7b. Build the Request Payload
+### 7b. Build the Request Payload
 
 Gather all the data the API needs:
 
@@ -376,9 +370,9 @@ X-MLS-Edge-Version: 1
 }
 ```
 
-#### 7c. Make the API Call
+### 7c. Make the API Call
 
-Execute the HTTP request using `curl` or the appropriate tool.
+Execute the HTTP request using the appropriate tool.
 
 **On success (200):** The response contains:
 
@@ -404,212 +398,33 @@ Execute the HTTP request using `curl` or the appropriate tool.
 - If `sync_status` is `"failed"` → all updates failed. Log errors, continue with local files
 
 **On error (non-200) or network failure:**
-- Log the error
+- Log the error (status code + user-friendly message only — never display API keys or response bodies)
 - Continue with session close — local files are already updated (Steps 1-6)
 - Inform user: "API sync failed ([error]). Local context is saved. Will retry on next session."
 
-#### 7d. Clean Up Active Session
+### 7d. Clean Up Active Session
 
 Delete `.mls/active_session.json` after the API call (success or failure). The session is closed either way.
 
-#### 7e. Confirm Supabase Sync
+### 7e. Confirm Supabase Sync
 
 Tell the user: "Synced to Supabase — session closed, [N] memory entries synced, [N] corrections added."
 
-### If sync.primary = "notion" OR Notion is configured as secondary:
+**Community Brain contribution is automatic.** When memory entries are written with `hub_shared: true`, they are instantly available to other hub members via hub-brain queries. No separate step needed.
 
-Check `.mls/config.json` for `notion.projects_data_source_id`. If it's `null` or not set, skip to the "no sync" path below — Notion sync is optional.
+### If no sync configured (sync.primary = "local" or no api_key):
 
-**Notion sync steps:**
-
-#### 7f. Update Properties
-
-1. Search the Projects database for a row matching this project name.
-2. If no row exists, create one. Save the page ID to `config.json > dashboard.notion_project_page_id`.
-3. Update the row with ALL properties:
-
-   **Core Identity:**
-   - **Project Name** — from `config.json > project.name`
-   - **Status** — "Active" (or "On Hold"/"Completed" if user indicated)
-   - **Owner** — primary user (most sessions from metrics)
-   - **Tier** — from `config.json > license.tier`
-   - **MLS Version** — `"3.0.0"` from `config.json > mls_core_version`
-   - **Tags** — infer from CONTEXT.md (see Tag Inference Rules in start skill)
-
-   **Session Intelligence:**
-   - **Last Handoff** — full "For Next Agent" section from latest CHANGELOG entry
-   - **Active Task Count** — count of Active items in TASKS.md (number)
-   - **Key Blockers** — from TASKS.md Blocked section (empty if none)
-   - **Last Session Date** — today (`date:Last Session Date:start` = ISO date, `is_datetime` = 0)
-
-   **Detail Fields:**
-   - **Context** — CONTEXT.md content (condensed if over 2000 chars)
-   - **Active Tasks** — Active and Up Next from TASKS.md
-   - **Changelog** — most recent 3-5 entries from CHANGELOG.md
-   - **Agent Notes** — same as Last Handoff
-
-   **Metrics:**
-   - **Session Count** — from metrics.json
-   - **Time Saved (min)** — from metrics.json
-   - **Users** — from metrics.json (comma-separated)
-   - **Content Version** — increment by 1
-
-   **Timestamps:**
-   - **Last Synced** — current datetime (`date:Last Synced:start` = ISO datetime, `is_datetime` = 1)
-
-#### 7g. Update Page Body
-
-After updating properties, **replace the Notion page body** with the v3 format:
-
-```markdown
-> **MLS Core Project Page** — Automatically synced from local `.mls/` directory.
-> **Version:** 3.0.0 | **Tier:** [tier] | **Last Synced:** [datetime]
-
----
-
-# 🎯 For Next Agent
-
-> **Read this first.** Direct handoff from the last session.
-
-[Full "For Next Agent" section from latest CHANGELOG entry — verbatim, every bullet]
-
----
-
-# 🏁 Goals
-
-## Active
-[Full Active Goals section from GOALS.md — with progress, statuses, and key tasks]
-
-## Recently Completed
-[Last 3 completed goals]
-
----
-
-# 📋 Project Context
-
-[Full CONTEXT.md content — all sections, unabridged]
-
----
-
-# 🎛️ User Preferences
-
-[Full PREFERENCES.md content]
-
----
-
-# ✅ Tasks
-
-[Full TASKS.md content — Active, Up Next, Blocked, Completed — all sections]
-
----
-
-# 📓 Session Changelog (Last 15)
-
-[15 most recent CHANGELOG.md entries — complete with tags, goals progress, summaries, and handoffs]
-
-> Full changelog ([total] sessions) maintained locally in .mls/context/CHANGELOG.md
-
----
-
-# 💬 Feedback & Self-Correction
-
-## Behavioral Patterns
-[FEEDBACK.md Patterns section]
-
-## Recent Ratings
-| Session | Tag | Rating | Comment |
-|---|---|---|---|
-| [most recent 10 entries] |
-
----
-
-# 🔧 Corrections
-
-## Active
-[Active Corrections from CORRECTIONS.md]
-
-## Recently Resolved
-[Last 5 resolved corrections]
-
----
-
-# 🤖 Agents
-Agent configuration is managed by the Agentic Layer. See `.agents/` directory.
-
----
-
-# 📊 Metrics
-
-| Metric | Value |
-|---|---|
-| Sessions | [N] |
-| Warm Starts | [N] |
-| Time Saved | [X] min |
-| Users | [list] |
-| Avg Satisfaction | [rating] ([N] ratings) |
-| Session Types | [breakdown] |
-| Active Goals | [N] |
-| Corrections | [N] active / [M] resolved |
-| MLS Version | 3.0.0 |
-| Tier | [tier] |
-| Content Version | [N] |
-| Last Synced | [datetime] |
-
----
-
-# Cloud Sync Status
-
-| Target | Status |
-|---|---|
-| Supabase | [Connected/Not configured] |
-| Notion | [Connected/Not configured] |
-| Community Brain | [Connected/Not configured] |
-| Last Supabase Sync | [datetime or "N/A"] |
-| Last Notion Sync | [datetime or "N/A"] |
-```
-
-**Self-heal on body write:** If `replace_content` fails, fall back to clearing the page and rewriting. If that also fails, log the error and continue — properties are already updated.
-
-**Security note:** The Notion page body contains the full project context. Ensure the page access is set to 'Private' or 'Workspace only'. Never include raw API keys, passwords, or credentials in CONTEXT.md — they will be synced to Notion.
-
-#### 7h. Confirm Sync
-
-Tell the user: "Synced to Notion — properties and page content updated."
-
-#### 7i. Sync to Community Brain
-
-If `config.json > community_brain.enabled` is `true` and `community_brain.project_row_id` is not null:
-
-1. **Update the project row** in the Community Brain Connected Projects database (data source ID from `config.json > community_brain.connected_projects_data_source_id`):
-   - **Sessions** — from `metrics.json > sessions.total`
-   - **Avg Rating** — from `metrics.json > feedback.avg_satisfaction`
-   - **Top Tags** — top 3 tags by count from `metrics.json > session_tags` (as JSON array)
-   - **Goals Completed** — from `metrics.json > goals.completed`
-   - **Goals Active** — from `metrics.json > goals.active`
-   - **Corrections** — from `metrics.json > corrections.total_logged`
-   - **Patterns** — from `metrics.json > feedback.patterns_identified`
-   - **Time Saved (hrs)** — estimated: `(sessions.total * 8) / 60` (8 min saved per session, converted to hours)
-   - **Last Sync** — today's date
-
-2. If the update succeeds, note in the close confirmation:
-   > "Community Brain updated — your project stats are live on the leaderboard."
-
-If Community Brain sync fails, continue. This is non-blocking.
-
-### If sync.primary = "local" OR no sync configured:
-
-Everything is local. No remote sync needed. Context files in `.mls/context/` are the source of truth.
+Everything is local. Context files in `.mls/context/` are the source of truth.
 
 ---
 
 ## Step 8: Surface the Dashboard Link
 
-**Mandatory after every session close.** Resolve the dashboard URL:
+**Mandatory after every session close.**
 
-1. `config.json > dashboard.url` → use that
-2. `config.json > dashboard.notion_project_page_id` → `https://www.notion.so/[page_id_without_dashes]`
-3. Notion row just created in Step 7 → use that URL, save ID to config
-4. None of the above → skip
+Resolve the dashboard URL from `config.json > dashboard.url`. If that field is null or empty, use the default: `https://memorylayer.pro/dashboard`.
+
+Show: `Dashboard: https://memorylayer.pro/dashboard/projects/{slug}` (use project slug from config if available, otherwise just the base URL).
 
 ---
 
@@ -617,10 +432,9 @@ Everything is local. No remote sync needed. Context files in `.mls/context/` are
 
 Keep it brief:
 
-> "Session [N] closed. Handoff written: '[first line of For Next Agent]'. Context, tasks, and goals updated. [Feedback: [rating] recorded.] [If synced: 'Synced to [Supabase/Notion].'] [If community brain synced: 'Leaderboard updated.']"
+> "Session [N] closed. Handoff written: '[first line of For Next Agent]'. Context, tasks, and goals updated. [Feedback: [rating] recorded.] [If synced: 'Synced to Supabase.']"
 >
-> "Dashboard: [resolved dashboard URL]"
-> [If community brain enabled] "Brain: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e"
+> "Dashboard: https://memorylayer.pro/dashboard"
 
 Then the value summary:
 
@@ -642,15 +456,11 @@ Don't run it without asking. But do remind them.
 
 ```json
 "dashboard": {
-  "url": null,
-  "fallback_to_notion": true,
-  "notion_project_page_id": "[auto-populated]"
+  "url": "https://memorylayer.pro/dashboard"
 }
 ```
 
-- **`url`** — Custom dashboard URL. Takes priority.
-- **`fallback_to_notion`** — Fall back to Notion page when `url` is null.
-- **`notion_project_page_id`** — Auto-populated on first sync.
+- **`url`** — Dashboard URL. Points to memorylayer.pro.
 
 ---
 
@@ -665,16 +475,14 @@ Don't run it without asking. But do remind them.
 | PREFERENCES.md deleted externally | Recreate from template. Preferences will rebuild from feedback. |
 | CORRECTIONS.md deleted externally | Recreate from template. Log any corrections from this session. |
 | metrics.json corrupted | Recreate with defaults. Infer from CHANGELOG entries |
-| Sync module fails | Complete local close (steps 1-6). Inform user. Retry next session |
-| CHANGELOG.md missing | Create with this session's entry. Note history loss |
-| Dashboard link unresolvable | Complete close normally. Note no dashboard configured |
-| Supabase SQL fails | Log error, continue local. Retry on next session. |
-| Notion API fails on properties | Log error, skip to page body attempt. If body also fails, continue local |
-| Notion page body write fails | Log error, continue — properties are already updated |
+| Supabase API timeout | Retry once. If still fails, log error, continue local. Retry next session. |
+| Supabase API auth error (401) | Config error — do not trip circuit breaker. Inform user to check api_key. |
+| Supabase sync failed | Log error, continue — local files are already updated |
 | config.json corrupted | Recreate from known project state. Warn user |
 | .agents/ missing | Continue. Agent hooks are optional. |
 | on_session_close.md fails | Log error, continue. Agent hooks never block close. |
 | Feedback collection skipped by user | Log as skipped, continue. Never blocks close. |
+| Circuit breaker open | Skip Supabase sync. Complete local close (Steps 1-6). Inform user. |
 
 **Principle: local close always succeeds.** Every step above the sync layer (Steps 1-6) must complete regardless of what happens with remote sync. Sync and dashboard are bonuses — Core's value (persistent context) works even when the remote layer is down.
 
@@ -685,22 +493,17 @@ Don't run it without asking. But do remind them.
 - **The handoff note is mandatory.** Every single close. No exceptions.
 - **Never skip context updates.** The 2-3 minutes saves 8+ minutes next session.
 - **Don't over-summarize.** Update files, write handoff, confirm, done.
-- **Respect concurrent changes.** Check before pushing on Pro tier.
-- **Always write the Notion page body, not just properties.** The body is the complete context layer.
 - **Always surface the dashboard link.**
-- **Always create the Notion row if missing.** No project invisible in Notion if IDs are configured.
 - **Fire agent close hook before sync.** Agent hooks may update context/tasks.
 - **Collect feedback without friction.** 1 click minimum. Never block close for it.
 - **Log corrections proactively.** The user shouldn't have to ask — scan for them.
 - **Update goals every session.** Even if progress is 0%, note that.
 - **Tag every session.** Auto-infer, let user override.
 - **Promote feedback patterns to preferences.** This is how the system learns permanently.
-- **15 entries in Notion changelog.** Not 3-5. Deep history for remote agents.
 - **Self-heal everything.** No corrupted file, missing directory, or API failure stops the close.
-- **Supabase is primary when configured.** Check sync.primary first.
-- **Notion is secondary or fallback.** Use when Supabase is not primary.
+- **Supabase is the only sync target.** There is no Notion fallback. If Supabase is down, close locally and retry on the next session.
 - **Agent hooks are optional and never blocking.** Graceful degradation always.
 - **Tier never blocks close.** Local close (Steps 1-6) always completes. Sync failures are logged, not fatal. Licensing only affects which cloud features are available.
 - **Sanitize error messages.** When logging API errors, include only: HTTP status code, error type, and a user-friendly message. Never display response bodies, stack traces, internal URLs, or the API key.
-- **Never include secrets in context files.** If CONTEXT.md contains what looks like API keys or passwords, warn the user before syncing to Notion or Supabase.
+- **Never include secrets in context files.** If CONTEXT.md contains what looks like API keys or passwords, warn the user before syncing to Supabase.
 - **MLS Core is proprietary software by Rabbithole LLC.** Redistribution or creation of derivative products is prohibited without written permission.

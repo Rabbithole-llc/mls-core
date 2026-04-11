@@ -78,21 +78,20 @@ For each hub module with `pipeline`:
 
 These are NOT optional anymore — run them every time.
 
-**Notion:**
+**Supabase / Remote Sync:**
 | Check | How | PASS | FAIL |
 |---|---|---|---|
-| `projects_data_source_id` set | Read config | ID present | INFO: "Notion not configured. System works locally. Connect with `/mls-core-start`." |
-| Notion API reachable | Attempt fetch via Notion MCP | Response OK | WARN: "Can't reach Notion. Check Notion MCP connection." |
-| Project row exists | Search database | Row found | WARN: "No project row in Notion. Will be created on next `/mls-core-start`." |
+| `supabase.api_key` set | Read config | Key present | INFO: "Not connected to memorylayer.pro. Run `/mls-core-start` to connect." |
+| `supabase.project_id` set | Read config | ID present | INFO: "No project ID configured. Run `/mls-core-start` to connect." |
+| Supabase API reachable | POST to `{supabase.api_base}/health-check` with `{api_key, project_id}` | 200 OK | FAIL: "Cannot reach Supabase API. Check network or `supabase.api_base` in config." |
+| Agent Marketplace reachable | `GET {supabase.api_base}/marketplace-agents?limit=1` | 200 OK | WARN: "Can't reach Agent Marketplace. Check network or try again later." |
 
 **Community Brain:**
 | Check | How | PASS | FAIL |
 |---|---|---|---|
-| `community_brain` block exists in config | Read config | Block found | WARN: "Community Brain not configured. Run `/mls-core-start` to join the network." |
+| `community_brain` block exists in config | Read config | Block found | INFO: "Community Brain not configured. Enabled by default for connected accounts." |
 | `community_brain.enabled` is true | Read config | True | INFO: "Community Brain is disabled. Set to true in config to join." |
-| `community_brain.project_row_id` set | Read config | ID present | WARN: "Not registered on leaderboard. Will register on next `/mls-core-start`." |
-| Community Brain page reachable | Fetch page 33733b46f2f281c8b1dcf5baa3f2cf0e via Notion MCP | Response OK | WARN: "Can't reach Community Brain page. Check Notion MCP connection." |
-| Agent Marketplace reachable | Fetch collection 41cf8d26-6a8a-48e3-aa36-dd7a7be5ec8a | Response OK | WARN: "Can't reach Agent Marketplace. Check Notion MCP connection." |
+| Hub-brain endpoint reachable (if `community_brain.enabled`) | POST to `{supabase.api_base}/hub-brain` | 200 OK | WARN: "Hub Brain unreachable. Community intelligence unavailable this session." |
 
 ### 7. v2 Feature Checks
 
@@ -104,7 +103,7 @@ These are NOT optional anymore — run them every time.
 | CORRECTIONS.md exists | Check file | Found | WARN: "Corrections file missing. Will be created on next session." |
 | preferences.feedback block in config | Read config | Found | WARN: "Feedback config missing. Adding defaults..." (auto-fix) |
 | preferences.warm_start_enabled in config | Read config | Found | WARN: "Warm start config missing. Adding defaults..." (auto-fix) |
-| community_brain block in config | Read config | Found | WARN: "Community Brain config missing. Adding defaults..." (auto-fix with enabled:true and the IDs) |
+| community_brain block in config | Read config | Found | WARN: "Community Brain config missing. Adding defaults..." (auto-fix with `enabled:true, share_level:'anonymized_metrics'`) |
 
 ---
 
@@ -113,7 +112,7 @@ These are NOT optional anymore — run them every time.
 When a check fails and auto-fix is available (marked above), fix it immediately and report:
 > "Auto-fixed: Created missing memory directory for Content Creator."
 
-For fixes that require user input (reinstall agent, fix YAML, reconnect Notion), suggest the action:
+For fixes that require user input (reinstall agent, fix YAML, reconnect memorylayer.pro), suggest the action:
 > "To fix: run `/mls-agents reinstall content-creator`"
 
 ---
@@ -130,15 +129,15 @@ Module Integrity ............ ⚠ WARN (14/15 — 1 warning)
   └ Ad Manager: memory directory missing (auto-fixed)
 Dependencies ................ ✓ PASS (2/2)
 Config Consistency .......... ✓ PASS (3/3)
-Connections ................. ✓ PASS (5/5)
-  └ Notion: connected
-  └ Community Brain: registered
+Connections ................. ✓ PASS (4/4)
+  └ Supabase: connected
   └ Agent Marketplace: reachable
+  └ Hub Brain: reachable
 v2 Features ................. ✓ PASS (7/7)
 
 Overall: HEALTHY
 
-🧠 Community Brain: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e
+🧠 Dashboard: https://memorylayer.pro/dashboard
 
 Installed agents: 5 (4 agents, 1 hub)
   ✓ Social Media Manager

@@ -8,7 +8,6 @@ const DATA = {
   activeTasks: 0,
   lastSessionTag: "build",
   timeSaved: "0 hrs",
-  notionConnected: false,
   communityBrainConnected: false,
   supabaseConnected: false,
   isWarmStart: false,
@@ -269,7 +268,6 @@ export default function MLSBootReconnect() {
             <div className="flex items-center gap-4 justify-center">
               {[
                 { connected: DATA.supabaseConnected, label: "Cloud Sync" },
-                { connected: DATA.notionConnected, label: "Notion" },
                 { connected: DATA.communityBrainConnected, label: "Community Brain" },
               ].map((c, i) => (
                 <div key={i} className="flex items-center gap-1.5">

@@ -3,7 +3,7 @@ name: mls-core-start
 description: "Session start for MLS Core — the Memory Layer System. Handles both first-time setup (initializing persistent memory on a new folder) and returning-session bootstrap (loading context, displaying status, reading the last agent's handoff). Use this skill whenever the user says /mls-core-start, 'start session', 'start mls', 'bootstrap', 'load context', 'initialize mls', 'set up memory', or at the start of any session where the agent needs to work within an MLS Core-enabled folder. Also trigger if you detect a .mls/ directory in the current workspace — that means MLS Core is installed and you should bootstrap before doing any work."
 ---
 
-# MLS Core V3 — Session Start
+# MLS Core V3.1 — Session Start
 
 ## ⛔ HARD RULE: MODE ENFORCEMENT
 
@@ -34,7 +34,7 @@ description: "Session start for MLS Core — the Memory Layer System. Handles bo
 
 **In text mode**, replace each visual phase with a brief text equivalent:
 - "folder_pick" → list all mounted folders, ask which one to use for MLS
-- "connect" → list the 3 connection options with memorylayer.pro URL visible, ask user to pick
+- "connect" → list the 2 connection options with memorylayer.pro URL visible, ask user to pick
 - "setup" → list the 3 setup options, ask user to pick
 - "capabilities" → list the 5 commands
 - "complete" → print checklist summary
@@ -82,10 +82,9 @@ After folder is selected, print one message per phase. Do NOT wait for "continue
 > Where should your memory live?
 > 1. **memorylayer.pro** — https://memorylayer.pro — cloud sync, team sharing, analytics
 >    → No account? → https://memorylayer.pro/signup (free)
-> 2. **Notion** — syncs to your Notion workspace
-> 3. **Local only** — stays on this machine, no account needed
+> 2. **Local only** — stays on this machine, no account needed
 >
-> Reply 1, 2, or 3.
+> Reply 1 or 2.
 
 **After connect choice, execute connection logic silently, then print setup options:**
 > Connected ✓ [or "Running local"] — now let's build your context.
@@ -140,9 +139,9 @@ Never skip step 4 (present_files) — without it the user sees a dead file link.
 
 | Template | File | When to use |
 |---|---|---|
-| First-Run | `templates/first-run.jsx` | No `.mls/` exists. PHASE: `"boot_folder"` → `"connect"` → `"setup"` → `"capabilities"` → `"complete"` |
+| First-Run | `templates/first-run.jsx` | No `.mls/` exists. PHASE: `"connect"` → `"setup"` → `"capabilities"` → `"complete"` |
 | Reconnect | `templates/reconnect.jsx` | `.mls/` exists, returning session. Auto-plays 7 phases in ~5s. |
-| Upgrade | `templates/upgrade.jsx` | Version mismatch (v1→v2→v3). 6-slide carousel. |
+| Upgrade | `templates/upgrade.jsx` | Version mismatch (v1→v2→v3→v4). 6-slide carousel. |
 | Loading | `templates/loading.jsx` | Between phases when doing work. Spinner + progress bar. |
 
 ### Template Placeholders
@@ -151,19 +150,18 @@ Never skip step 4 (present_files) — without it the user sees a dead file link.
 - `DATA.folderName` — workspace folder name
 - `DATA.folderPath` — full path
 - `DATA.isEmptyFolder` — boolean
-- `PHASE` — `"boot_folder"` | `"connect"` | `"setup"` | `"capabilities"` | `"complete"`
-- `CONNECT_DATA.choice` — `"memorylayer"` | `"notion"` | `"local"` (for "connect" phase)
+- `PHASE` — `"connect"` | `"setup"` | `"capabilities"` | `"complete"`
+- `CONNECT_DATA.choice` — `"memorylayer"` | `"local"` (for "connect" phase)
 - `CONNECT_DATA.projectName` — confirmed project name
-- `CONNECT_DATA.dashboardUrl` — memorylayer.pro or Notion URL (shown in "complete" phase)
+- `CONNECT_DATA.dashboardUrl` — memorylayer.pro URL (shown in "complete" phase)
 - `SETUP_DATA.projectName` — project name (for "complete" phase)
-- `SETUP_DATA.notionConnected` — boolean
 - `SETUP_DATA.mlsConnected` — boolean
 - `SETUP_DATA.communityBrainConnected` — boolean
 
 **reconnect.jsx:**
 - `DATA.projectName`, `DATA.sessionNumber`, `DATA.lastHandoff` (string[])
 - `DATA.activeGoals` ({name, progress}[]), `DATA.activeTasks` (number)
-- `DATA.lastSessionTag`, `DATA.timeSaved`, `DATA.notionConnected`
+- `DATA.lastSessionTag`, `DATA.timeSaved`
 - `DATA.mlsConnected`, `DATA.communityBrainConnected`, `DATA.agentCount`
 - `DATA.isWarmStart`, `DATA.lastSessionMinutesAgo`
 
@@ -182,7 +180,7 @@ Skip the loading screen if the transition is instant (no file creation needed).
 
 ### Animation Timing
 
-The first-run boot animation auto-transitions from boot → folder confirm in **3 seconds**. The reconnect animation auto-plays through 7 phases in ~5 seconds (warm start: ~3 seconds).
+The reconnect animation auto-plays through 7 phases in ~5 seconds (warm start: ~3 seconds).
 
 ### Fallback
 
@@ -196,7 +194,7 @@ Check for `.mls/config.json` in the workspace folder.
 
 - **No `.mls/`** → First-Run Setup
 - **`.mls/config.json` exists, `initialized: false`** → First-Run Setup
-- **`.mls/config.json` exists, `initialized: true`** → Returning Session Bootstrap
+- **`.mls/config.json` exists, `initialized: true`** → Version Migration Check → Returning Session Bootstrap
 
 ### Self-Heal
 
@@ -207,6 +205,50 @@ Before proceeding, validate `.mls/` structure if it exists. Missing/corrupted fi
 - `modules/` missing → recreate with MODULE_TEMPLATE.md
 
 **Principle: Core always boots.** No missing file should prevent bootstrap.
+
+---
+
+## Version Migration (v3 → v4)
+
+**Run this check before first-run or returning session, whenever `config.json` exists.**
+
+If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any version below `"3.1.0"`:
+
+1. **Inform the user:**
+   > "Upgrading to MLS Core v3.1.0 — sync is now Supabase-only. Your existing data is preserved. This takes a moment..."
+
+2. **Remove Notion keys** from config.json:
+   - Delete: `config.notion` (entire block)
+   - Delete: `community_brain.page_id`
+   - Delete: `community_brain.connected_projects_data_source_id`
+   - Delete: `community_brain.agent_marketplace_data_source_id`
+   - Delete: `community_brain.project_row_id`
+   - Delete: `dashboard.fallback_to_notion`
+   - Delete: `dashboard.notion_project_page_id`
+
+3. **Preserve Supabase keys** (if already set):
+   - Keep: `supabase.api_key`, `supabase.project_id`, `supabase.api_base`
+
+4. **Set or ensure these keys exist:**
+   - `supabase.api_base` → `"https://pjtqhxurdbaeatssorju.supabase.co/functions/v1"` (if not already set)
+   - `community_brain.enabled` → keep existing value (default: `true`)
+   - `community_brain.share_level` → keep existing value (default: `"anonymized_metrics"`)
+   - `dashboard.url` → `"https://memorylayer.pro/dashboard"`
+   - `sync.primary` → `"supabase"` (was `"notion"` or unset)
+
+5. **Bump version:**
+   - `mls_core_version` → `"3.1.0"`
+
+6. **Log migration in CHANGELOG.md** (append at top):
+   ```
+   ## Config Migration — [YYYY-MM-DD] | admin
+   **Summary:** Upgraded MLS Core config from v3 to v3.1.0. Supabase is now the only sync backend. Notion keys removed. Local context files and Supabase data are unchanged.
+   ```
+
+7. **If user had Notion configured:** Add a soft notice to the CHANGELOG entry:
+   > "Note: Your Notion pages still exist but are no longer synced by MLS Core. Supabase is now the single source of truth."
+
+After migration, continue to Returning Session Bootstrap.
 
 ---
 
@@ -245,7 +287,7 @@ The user already has a memorylayer.pro account. Skip the full connect phase enti
 POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/register
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
-X-MLS-Edge-Version: 1
+
 
 { "email": "[stored email from global.json]" }
 ```
@@ -313,21 +355,20 @@ After the user picks their mode (Step -1) and their folder (Step -0.5):
 
 ### Phase Flow
 
-First-run goes: **connect → setup → complete**. The `boot_folder` phase is removed entirely.
+First-run goes: **connect → setup → complete**.
 
 ---
 
 ### "connect" Phase — Where Should Memory Live?
 
-**This is the most important choice in first-run.** Show the URL prominently. All three paths are first-class:
+**This is the most important choice in first-run.** Show the URL prominently. Both paths are first-class:
 
 > **Where should your memory live?**
 >
 > 1. **memorylayer.pro** — https://memorylayer.pro — Cloud sync, team sharing, session analytics. Sign up or log in with your email — free to start.
-> 2. **Notion** — Syncs to your Notion workspace. Your context lives as a structured, searchable page. Great for solo users already in Notion.
-> 3. **Local only** — Memory stays on this machine. Fast, private, no account needed. Connect later with `/mls-connect`.
+> 2. **Local only** — Memory stays on this machine. Fast, private, no account needed. Connect later with `/mls-connect`.
 
-Wait for the user's choice (1, 2, 3, or the name of the option).
+Wait for the user's choice (1, 2, or the name of the option).
 
 ---
 
@@ -343,7 +384,7 @@ Take the email the user provides. **This endpoint requires the Supabase anon key
 POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/register
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
-X-MLS-Edge-Version: 1
+
 
 {
   "email": "[the email they entered]",
@@ -358,7 +399,7 @@ This endpoint is **idempotent** — if the email already has an account, it retu
 Re-prompt the email.
 
 **On 422 (validation error):**
-> "Couldn't create your account — check that your email is correct, or choose Notion / Local instead."
+> "Couldn't create your account — check that your email is correct, or choose Local instead."
 Re-prompt or let them pick a different option.
 
 **On success (200):**
@@ -445,39 +486,7 @@ Fall through to local-only. Do not block.
 
 ---
 
-#### Option 2: Notion
-
-**Make this feel like a reveal.** The Notion page IS the dashboard — it should appear within seconds and look impressive.
-
-Show loading: "Connecting to your Notion workspace..."
-
-1. **Check if Notion MCP is available** — try calling the Notion search tool. If it errors or doesn't exist:
-   > "Notion MCP isn't connected. Add the Notion integration in your Claude Desktop settings. Continuing in local mode — run `/mls-core-start` again after connecting Notion."
-   Fall through to local-only.
-
-2. **Auto-discover the Projects database:**
-   - Search with query "MLS Core Projects" or "MLS Projects"
-   - If found: use it. Inform user: "Found your MLS Projects database."
-   - If not found: offer to create one → create a Notion database with the full MLS schema.
-
-3. **Create the project page immediately** with rich content:
-   - Project Name, Status = "Active", MLS Version = "3.0.0"
-   - Context block, Goals block, Tasks block, first Changelog entry, Agent Notes
-   - Save `notion_project_page_id` to `config.json > dashboard.notion_project_page_id`
-   - Save `projects_data_source_id` to `config.json > notion.projects_data_source_id`
-   - Set `sync.primary = "notion"` in `config.json`
-
-4. **Surface the link immediately — make it an event:**
-   > "Your memory is live → [Notion page URL]"
-   The user should open Notion right now and see their project already populated with structure. That is the MLS showcase moment.
-
-5. **Register on Community Brain** (see section below).
-
-6. Set `CONNECT_DATA.choice = "notion"`, `CONNECT_DATA.dashboardUrl = "[notion page url]"`
-
----
-
-#### Option 3: Local Only
+#### Option 2: Local Only
 
 Store in `config.json`:
 ```json
@@ -531,7 +540,6 @@ Resolution order: existing file with content → .template.md copy → config-te
 
 **Skip logic:** If `initialized: true` AND context files have content AND `sessions.total` > 0 → skip to Returning Session Bootstrap. If user says "skip"/"let's go" → respect immediately.
 
-**2a. Project Confirmation** — handled by "boot_folder" phase above
 **2b. Connection** — handled by "connect" phase above. NOT optional — every user must make a conscious choice.
 **2c. Welcome** — explain the 7 core files (CONTEXT, TASKS, CHANGELOG, GOALS, PREFERENCES, FEEDBACK, CORRECTIONS)
 **2d. Setup Method:**
@@ -543,7 +551,7 @@ Resolution order: existing file with content → .template.md copy → config-te
 
 ### Initialize
 
-1. Update `config.json`: `mls_core_version` → "3.0.0", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
+1. Update `config.json`: `mls_core_version` → "3.1.0", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
 2. Initialize `metrics.json`: `instance_id`, `created_at`, `sessions.total_count` → 1, all v2 blocks
 3. Write first CHANGELOG entry with "For Next Agent" section
 4. **If connected to memorylayer.pro (sync.primary = "supabase"):** Write `GLOBAL_CREDS_PATH` (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`) with `{ "api_key": "[response.api_key]", "user_id": "[response.user.id]", "email": "[response.user.email]", "connected_at": "[ISO date]" }`. Create `/sessions/stoic-laughing-bardeen/mnt/.mls/` directory if it doesn't exist. **Do NOT use `~/.mls/` — that path is ephemeral and will not persist between sessions.** This is the account-level key returned by `POST /register` — it works frictionlessly across all future projects on this machine, no re-authentication needed.
@@ -551,33 +559,6 @@ Resolution order: existing file with content → .template.md copy → config-te
 ### Fire Agent Start Hook
 
 If `.agents/on_session_start.md` exists, read and execute its instructions. Non-blocking if missing or fails. Agents are optional.
-
----
-
-### Community Brain Registration (Notion path only, first run)
-
-If `community_brain.enabled` is `true` and `community_brain.project_row_id` is `null`:
-
-1. Create a row in the "Connected Projects" database:
-   - Data source ID: `collection://0223cc81-5cea-4f64-8bd6-4065e0ac136e`
-   - Properties (names must match EXACTLY):
-     - **Project** (title) — project name
-     - **Status** (select) — `"active"`
-     - **Sessions** (number) — `1`
-     - **MLS Version** (select) — `"3.0.0"`
-     - **Avg Rating** (number) — leave null
-     - **Time Saved (hrs)** (number) — `0`
-     - **Goals Active** (number) — count from GOALS.md
-     - **Goals Completed** (number) — `0`
-     - **Corrections** (number) — `0`
-     - **Patterns** (number) — `0`
-     - **Top Tags** (multi_select) — `[]`
-     - **Last Sync** (date) — today
-   - Use `notion-create-pages` with `data_source_url: "collection://0223cc81-5cea-4f64-8bd6-4065e0ac136e"`
-2. Save the returned page ID to `config.json > community_brain.project_row_id`.
-3. Inform user: "Your project is live on the Memory Layer Community Brain! Bookmark: https://www.notion.so/33733b46f2f281c8b1dcf5baa3f2cf0e"
-
-If Community Brain registration fails, continue. Non-blocking.
 
 ---
 
@@ -594,7 +575,7 @@ If Community Brain registration fails, continue. Non-blocking.
 **Visual mode ONLY:** Read `templates/reconnect.jsx`, fill DATA:
 - `projectName` from config, `sessionNumber` from metrics + 1
 - `lastHandoff` from CHANGELOG, `lastSessionTag` from CHANGELOG
-- `timeSaved` from metrics, `notionConnected`/`mlsConnected`/`communityBrainConnected` from config
+- `timeSaved` from metrics, `mlsConnected`/`communityBrainConnected` from config
 - `agentCount` from config, `isWarmStart` detection, `lastSessionMinutesAgo`
 - For `activeGoals` and `activeTasks` — use `[]` and `0` if not yet loaded
 Write as `mls-boot.jsx` → call `present_files` → STOP.
@@ -604,7 +585,7 @@ Write as `mls-boot.jsx` → call `present_files` → STOP.
 > Dashboard: https://memorylayer.pro/dashboard
 > Last handoff: [first line of For Next Agent]
 > Goals: [N] active | Tasks: [N] active | Saved: [X hrs]
-> Connections: memorylayer.pro [yes/no] | Notion [yes/no] | Community Brain [yes/no]
+> Connections: memorylayer.pro [yes/no] | Community Brain [yes/no]
 > Loading context...
 
 In text mode, immediately proceed to Step 3 after printing this summary — do not wait for user input.
@@ -627,6 +608,7 @@ POST {config.json > supabase.api_base}/session-start
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
 
+
 {
   "api_key": "{config.json > supabase.api_key}",
   "project_id": "{config.json > supabase.project_id}",
@@ -643,18 +625,7 @@ On success: store session ID in `.mls/active_session.json` as `{"session_id": "u
 
 On error: log it, write `{"session_id": null, "local_only": true, "error": "..."}`, continue in local-only mode.
 
-If no API key configured: skip entirely. Backward compatible with V2.
-
-### Version Migration (v2→v3)
-
-If `mls_core_version` is "2.0.0":
-1. Add `supabase` block (null values — user connects via `/mls-connect`)
-2. Add `sync` block with defaults
-3. Remove `agents` block (moved to `.agents/agent-config.json`)
-4. Create `.agents/` directory structure if missing
-5. Bump version to "3.0.0"
-6. Log migration in CHANGELOG
-7. Show upgrade carousel if visual mode
+If no API key configured: skip entirely. Local-only mode.
 
 ### Warm Start Detection
 
@@ -676,9 +647,7 @@ If `.agents/on_session_start.md` exists, read and execute. Non-blocking if missi
 
 Determine from `config.json > sync.primary`:
 
-**`"supabase"`:** If Step 4 succeeded, sync is done. If Step 4 failed, fall back to Notion if configured.
-
-**`"notion"`:** Search Projects database, compare Content Version, pull if newer. Always surface dashboard link.
+**`"supabase"`:** If Step 4 succeeded, sync is done. On failure, fall through to local-only and warn user.
 
 **`"local"`:** Skip.
 
@@ -707,13 +676,13 @@ Increment `sessions.total_count`, record `started_at`. Bootstrap complete — re
 ```json
 "sync": {
   "primary": "supabase",
-  "conflict_resolution": "local_wins",
+  "conflict_resolution": "ask_user",
   "auto_push_on_close": true,
   "auto_pull_on_start": true
 }
 ```
 
-`primary` options: `"supabase"` | `"notion"` | `"local"`
+`primary` options: `"supabase"` | `"local"`
 
 ### Preferences
 
@@ -739,11 +708,7 @@ Increment `sessions.total_count`, record `started_at`. Bootstrap complete — re
 ```json
 "community_brain": {
   "enabled": true,
-  "page_id": "33733b46f2f281c8b1dcf5baa3f2cf0e",
-  "connected_projects_data_source_id": "0223cc81-5cea-4f64-8bd6-4065e0ac136e",
-  "agent_marketplace_data_source_id": "41cf8d26-6a8a-48e3-aa36-dd7a7be5ec8a",
-  "share_level": "anonymized_metrics",
-  "project_row_id": null
+  "share_level": "anonymized_metrics"
 }
 ```
 
@@ -751,9 +716,63 @@ Increment `sessions.total_count`, record `started_at`. Bootstrap complete — re
 
 ```json
 "dashboard": {
-  "url": null,
-  "fallback_to_notion": true,
-  "notion_project_page_id": null
+  "url": "https://memorylayer.pro/dashboard"
+}
+```
+
+## Full Config.json v3.1.0 Schema
+
+```json
+{
+  "mls_core_version": "3.1.0",
+  "initialized": true,
+  "initialization_date": "2026-04-10",
+  "setup_method": "seed_from_files",
+  "project": {
+    "name": "...",
+    "description": "...",
+    "stage": "active_development",
+    "tech_stack": ["..."]
+  },
+  "license": { "tier": "free" },
+  "preferences": {
+    "status_display_on_start": true,
+    "auto_context_update_on_close": true,
+    "changelog_max_entries": 30,
+    "context_pruning_interval": 30,
+    "warm_start_enabled": true,
+    "warm_start_threshold_minutes": 120,
+    "feedback": {
+      "enabled": true,
+      "prompt_at_close": true,
+      "collect_agent_self_assessment": true,
+      "pattern_threshold": 3
+    }
+  },
+  "supabase": {
+    "api_key": null,
+    "account_key": null,
+    "project_id": null,
+    "api_base": "https://pjtqhxurdbaeatssorju.supabase.co/functions/v1"
+  },
+  "community_brain": {
+    "enabled": true,
+    "share_level": "anonymized_metrics"
+  },
+  "agents": {
+    "enabled": true,
+    "max_concurrent": 3,
+    "require_approval_for_autonomous": true,
+    "trigger_dispatch_version": "1.0.0",
+    "installed_modules": []
+  },
+  "dashboard": {
+    "url": "https://memorylayer.pro/dashboard"
+  },
+  "sync": {
+    "primary": "supabase",
+    "conflict_resolution": "ask_user"
+  }
 }
 ```
 
@@ -773,11 +792,8 @@ APIs/backends → `backend`, React/UI → `frontend`, CI/CD/Docker → `devops`,
 - Core always boots — self-heal and continue through any failure
 - **The "connect" phase is mandatory on first run.** Never skip it. Every user must consciously choose where memory lives.
 - **memorylayer.pro path: always call `POST /register`.** Without it, the account and project are never provisioned. The returned `api_key` authenticates all future calls; the `project.id` scopes all memory. Both must be stored — `api_key` in `config.json > supabase.api_key` and in `global.json`; `project.id` in `config.json > supabase.project_id`. No pre-existing API key is required — email is the only input needed.
-- **Notion path: create the project page immediately and surface the link.** Make it feel like something just came alive.
 - **The Session Start API call is non-blocking.** Fail gracefully, continue locally.
 - **Always store the session ID.** Without it, session-end can't close the server-side session.
 - **Agent hooks are optional.** Load from `.agents/`, don't manage behavior.
-- **Auto-discover Notion databases** — never ask for IDs you can search for.
-- **Write rich content to Notion pages** — never create empty shells.
 - Respect PREFERENCES.md > default behavior. Apply FEEDBACK.md patterns. CORRECTIONS.md overrides CONTEXT.md conflicts.
 - **MLS Core is proprietary software by Rabbithole LLC.** Redistribution or derivative products prohibited without written permission.

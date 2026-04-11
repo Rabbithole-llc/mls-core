@@ -102,26 +102,24 @@ function MigrationChecklist({ items, colors }) {
 
 const upgradeSlides = [
   { id: "welcome", badge: "Upgrade", accent: "cyan", number: "01", icon: "\u{1F680}", title: "Welcome to v3.0.0", subtitle: "Upgraded from v2.0.0", body: "Your project has been automatically migrated. All your context, goals, feedback, and preferences are preserved — plus Supabase cloud sync is now built in.", versionBadge: true },
-  { id: "features", badge: "What's New", accent: "teal", number: "02", icon: "\u2728", title: "Supabase Cloud Sync", subtitle: "Your memory now lives in the cloud — no Notion required",
+  { id: "features", badge: "What's New", accent: "teal", number: "02", icon: "\u2728", title: "Supabase Cloud Sync", subtitle: "Your memory now lives in the cloud",
     newFeatures: [
       { name: "Supabase Backend", desc: "Real-time cloud sync via Edge Functions.", icon: "\u2601\uFE0F" },
       { name: "Session API", desc: "Start/end sessions with server-side tracking.", icon: "\u{1F504}" },
       { name: "Memory API", desc: "Push context snapshots mid-session.", icon: "\u{1F9E0}" },
       { name: "API Key Auth", desc: "Secure project-scoped authentication.", icon: "\u{1F511}" },
       { name: "Local-First", desc: "Works offline. Syncs when connected.", icon: "\u{1F4BE}" },
-      { name: "Notion Secondary", desc: "Notion still works as dashboard fallback.", icon: "\u{1F4CB}" },
       { name: "Agent Hooks", desc: "Agents decoupled from Core via .agents/", icon: "\u{1F�}" },
       { name: "Auto-Migration", desc: "V2 configs upgraded automatically.", icon: "\u{1F4E6}" },
     ] },
-  { id: "community", badge: "Community Brain", accent: "emerald", number: "03", icon: "\u{1F30D}", title: "Join the Network", subtitle: "Your project now connects to Memory Layer community powered by Supabase + Notion",
+  { id: "community", badge: "Community Brain", accent: "emerald", number: "03", icon: "\u{1F30D}", title: "Join the Network", subtitle: "Your project now connects to Memory Layer community powered by Supabase",
     communityFeatures: [
       { name: "Project Leaderboard", desc: "See the most active projects. Stats update every session close.", icon: "\u{1F3C6}" },
-      { name: "Agent Marketplace", desc: "Browse and install specialized agents directly from Notion.", icon: "\u{1F6D2}" },
+      { name: "Agent Marketplace", desc: "Browse and install specialized agents from the marketplace.", icon: "\u{1F6D2}" },
       { name: "Network Insights", desc: "Collective patterns, popular tags, and ROI across all projects.", icon: "\u{1F4CA}" },
     ], footer: "Your data is anonymized by default." },
   { id: "commands", badge: "Architecture Changes", accent: "cyan", number: "04", icon: "\u{1F6E0}\uFE0F", title: "Architecture Changes", subtitle: "What moved in V3",
     commandChanges: [
-      { old: "Notion primary sync", new: "Supabase primary", desc: "Cloud sync via Edge Functions" },
       { old: "Agents in config.json", new: ".agents/ directory", desc: "Hook-based agent system" },
     ] },
   { id: "migrated", badge: "Auto-Migrated", accent: "indigo", number: "05", icon: "\u{1F4E6}", title: "Your Project, Upgraded", subtitle: "Zero data loss", migrationChecklist: true },
@@ -214,8 +212,8 @@ function SlideContent({ slide }) {
         <MigrationChecklist items={[
           { label: "All existing context preserved" }, { label: "Supabase config block added" },
           { label: "Sync config block added (primary: supabase)" }, { label: "Agent config moved to .agents/" },
-          { label: ".agents/ directory created" }, { label: "Notion retained as secondary sync" },
-          { label: "Community Brain still connected" }, { label: "Version bumped to 3.0.0" },
+          { label: ".agents/ directory created" }, { label: "Community Brain still connected" },
+          { label: "Version bumped to 3.0.0" },
         ]} colors={colors} />
       )}
       {slide.readySlide && <UpgradeReadyAnimation />}
