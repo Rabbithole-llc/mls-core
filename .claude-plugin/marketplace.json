@@ -8,8 +8,8 @@
     {
       "name": "memory-layer-core",
       "source": ".",
-      "description": "Memory Layer (MLS Core) — persistent memory for AI agents. Every session builds on the last with context, tasks, goals, handoff notes, feedback loops, and cloud sync via Supabase. Notion dashboard integration. Install once, remember forever.",
-      "version": "3.0.2",
+      "description": "Memory Layer (MLS Core) — persistent memory for AI agents. Every session builds on the last with context, tasks, goals, handoff notes, feedback loops, and cloud sync via Supabase. Install once, remember forever.",
+      "version": "4.0.0",
       "author": {
         "name": "Rabbithole LLC"
       }

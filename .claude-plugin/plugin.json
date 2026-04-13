@@ -1,6 +1,6 @@
 {
   "name": "memory-layer-core",
-  "version": "3.1.7",
+  "version": "4.0.0",
   "description": "Memory Layer (MLS Core) — persistent memory for AI agents. Every session builds on the last with context, tasks, goals, handoff notes, feedback loops, and cloud sync via Supabase. Install once, remember forever.",
   "author": {
     "name": "Rabbithole LLC"
@@ -13,7 +13,58 @@
     "supabase-sync",
     "agent-modules",
     "mls-core",
-    "cloud-sync"
+    "cloud-sync",
+    "mcp-server"
   ],
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "mcp_server": {
+    "package": "@memorylayer/mcp-server",
+    "description": "MCP server alternative to this plugin. Works in Claude Code, Cursor, Windsurf, and any MCP-compatible AI tool. Exposes 15 tools covering sessions, push/pull, file storage, semantic search, agents, and team management.",
+    "install": {
+      "claude_code": {
+        "settings_file": ".claude/settings.json",
+        "config": {
+          "mcpServers": {
+            "mls-core": {
+              "command": "npx",
+              "args": ["-y", "@memorylayer/mcp-server"],
+              "env": {
+                "MLS_API_KEY": "<your-api-key>"
+              }
+            }
+          }
+        }
+      },
+      "cursor": {
+        "settings_file": ".cursor/mcp.json",
+        "config": {
+          "mcpServers": {
+            "mls-core": {
+              "command": "npx",
+              "args": ["-y", "@memorylayer/mcp-server"],
+              "env": {
+                "MLS_API_KEY": "<your-api-key>"
+              }
+            }
+          }
+        }
+      },
+      "windsurf": {
+        "settings_file": "~/.codeium/windsurf/mcp_config.json",
+        "config": {
+          "mcpServers": {
+            "mls-core": {
+              "command": "npx",
+              "args": ["-y", "@memorylayer/mcp-server"],
+              "env": {
+                "MLS_API_KEY": "<your-api-key>"
+              }
+            }
+          }
+        }
+      }
+    },
+    "api_key_location": ".mls/config.json → supabase.api_key",
+    "api_key_dashboard": "https://memorylayer.pro/dashboard"
+  }
 }

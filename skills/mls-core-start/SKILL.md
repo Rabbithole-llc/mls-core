@@ -206,6 +206,22 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHV
 
 ---
 
+## MCP Server Alternative
+
+This skill instructs the AI to call Supabase edge functions directly using `curl`-style HTTP requests. That works everywhere but requires the AI to manage auth headers and parse responses inline.
+
+**If you're in Claude Code, Cursor, Windsurf, or any other MCP-compatible tool**, you can connect the MLS Core MCP server instead. The MCP server exposes all the same operations (session-start, session-end, push, pull, file upload, agent marketplace, etc.) as first-class tools — no HTTP wrangling, typed inputs/outputs, and proper error surfacing.
+
+**When to use which:**
+| Approach | Best for |
+|---|---|
+| Plugin skill (this file) | Claude Code (no MCP setup) — zero-config, works immediately |
+| MCP server | Claude Code, Cursor, Windsurf, or any MCP host — more reliable, platform-agnostic |
+
+**To connect the MCP server**, see the [MCP Server Setup](#mcp-server-setup) section in the README or plugin docs. Once connected, you do not need this skill file — the MCP server tools replace it entirely.
+
+---
+
 ## First-Run Setup
 
 ### Step 0.1: Global Credential Check
