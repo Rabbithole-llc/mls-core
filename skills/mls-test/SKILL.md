@@ -93,7 +93,7 @@ These are NOT optional anymore — run them every time.
 | `community_brain.enabled` is true | Read config | True | INFO: "Community Brain is disabled. Set to true in config to join." |
 | Hub-brain endpoint reachable (if `community_brain.enabled`) | POST to `{supabase.api_base}/hub-brain` | 200 OK | WARN: "Hub Brain unreachable. Community intelligence unavailable this session." |
 
-### 7. v2 Feature Checks
+### 7. Feature Checks
 
 | Check | How | PASS | FAIL |
 |---|---|---|---|
@@ -133,7 +133,7 @@ Connections ................. ✓ PASS (4/4)
   └ Supabase: connected
   └ Agent Marketplace: reachable
   └ Hub Brain: reachable
-v2 Features ................. ✓ PASS (7/7)
+Features .................... ✓ PASS (7/7)
 
 Overall: HEALTHY
 

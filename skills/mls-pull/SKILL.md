@@ -55,6 +55,11 @@ Before attempting any Supabase call:
 
 ## Step 1: Pull from Supabase
 
+**Supabase anon key** — use as the `Authorization: Bearer` value for all edge function calls in this skill:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+```
+
 **Only execute this step if `supabase.api_key` is set.**
 
 1. **Check API key:**
@@ -66,7 +71,7 @@ Before attempting any Supabase call:
      ```
      Headers:
        Content-Type: application/json
-       Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+       Authorization: Bearer {SUPABASE_ANON_KEY}
        X-MLS-Edge-Version: 1
 
      Body:

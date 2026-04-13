@@ -75,6 +75,11 @@ Before attempting any Supabase call:
 
 ## Step 2: Push to Supabase
 
+**Supabase anon key** — use as the `Authorization: Bearer` value for all edge function calls in this skill:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+```
+
 1. Extract credentials from `.mls/config.json`:
    - `api_key` from `supabase.api_key`
    - `api_base` from `supabase.api_base`
@@ -115,7 +120,7 @@ Before attempting any Supabase call:
 5. Make POST request to `{config.json > supabase.api_base}/remember` with the above payload:
    ```
    Content-Type: application/json
-   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+   Authorization: Bearer {SUPABASE_ANON_KEY}
    X-MLS-Edge-Version: 1
    ```
 
@@ -144,7 +149,7 @@ Before attempting any Supabase call:
 ```
 POST {config.json > supabase.api_base}/upload-file
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+Authorization: Bearer {SUPABASE_ANON_KEY}
 X-MLS-Edge-Version: 1
 
 {

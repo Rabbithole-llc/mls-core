@@ -16,6 +16,6 @@ Thumbs.db
 node_modules/
 
 # Instance-specific files (these belong to individual installs, not the product repo)
-# Uncomment if you ever test MLS Core locally inside this repo:
-# .mls/metrics.json
-# .mls/context/CHANGELOG_ARCHIVE.md
+.mls/
+global.json
+mls-boot.jsx

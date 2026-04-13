@@ -82,7 +82,7 @@ The Agent Marketplace is served by the `marketplace-agents` Supabase edge functi
 
 ```
 GET {MLS_API_BASE}/marketplace-agents?sort=installs&limit=20
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+Authorization: Bearer {SUPABASE_ANON_KEY}
 ```
 
 Optional query params:
@@ -228,7 +228,7 @@ Mark agents that are already installed with `✓ installed` next to them.
    ```
    POST {MLS_API_BASE}/agent-install
    Content-Type: application/json
-   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+   Authorization: Bearer {SUPABASE_ANON_KEY}
 
    {
      "api_key": "[SUPABASE_API_KEY]",
@@ -382,7 +382,7 @@ When any installed agent **completes a task** during the session, log it via the
 ```
 POST {MLS_API_BASE}/agent-run
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+Authorization: Bearer {SUPABASE_ANON_KEY}
 
 {
   "api_key": "[SUPABASE_API_KEY]",
@@ -404,7 +404,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 }
 ```
 
-This is how every local agent run becomes visible in the hub dashboard — enabling JRP and Austin (and any team member) to see what ran, when, and what it produced, without leaving the platform.
+This is how every local agent run becomes visible in the hub dashboard — enabling all hub members to see what ran, when, and what it produced, without leaving the platform.
 
 ---
 
