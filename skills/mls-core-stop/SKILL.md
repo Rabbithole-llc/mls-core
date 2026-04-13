@@ -71,7 +71,7 @@ Read the current `.mls/context/TASKS.md` and update it:
 
 ---
 
-## Step 2.5: Update GOALS.md ← NEW in v2
+## Step 2.5: Update GOALS.md
 
 Read `.mls/context/GOALS.md` and update active goals:
 
@@ -158,15 +158,15 @@ Read `.mls/metrics.json` and update:
 7. `value.context_recovery_minutes_saved` → recalculate: `(sessions.total_count - 1) * 8`
 8. `context.entries_count` → recount sections in CONTEXT.md (each `##` header with content = 1 entry)
 9. `context.last_updated` → current ISO timestamp
-10. `session_tags.[tag]` → increment the tag used in this session's changelog entry ← NEW in v2
-11. `goals.active` → count active goals in GOALS.md ← NEW in v2
-12. `goals.completed` → count completed goals ← NEW in v2
+10. `session_tags.[tag]` → increment the tag used in this session's changelog entry
+11. `goals.active` → count active goals in GOALS.md
+12. `goals.completed` → count completed goals
 
 **Self-heal:** If `metrics.json` is corrupted or invalid, recreate it. Infer session count from CHANGELOG entries, user list from CHANGELOG user fields.
 
 ---
 
-## Step 4.5: Collect Feedback ← NEW in v2
+## Step 4.5: Collect Feedback
 
 Check `config.json > preferences.feedback.enabled`. If false, skip.
 
@@ -212,7 +212,7 @@ Check `config.json > preferences.feedback.enabled`. If false, skip.
 
 ---
 
-## Step 4.7: Log Corrections ← NEW in v2
+## Step 4.7: Log Corrections
 
 Scan the session for moments where the user corrected the agent:
 
@@ -239,7 +239,7 @@ If no corrections occurred this session, skip silently.
 
 ---
 
-## Step 4.8: Update PREFERENCES.md ← NEW in v2
+## Step 4.8: Update PREFERENCES.md
 
 Check if any user preferences were expressed during this session:
 
@@ -301,6 +301,11 @@ Before attempting any Supabase call, check the global sync health state.
 
 ## Step 7: Sync to Remote
 
+**Supabase anon key** — use as the `Authorization: Bearer` value for all edge function calls in this skill:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+```
+
 ### Tier Check Before Sync
 
 Read `config.json > license.tier`:
@@ -333,7 +338,7 @@ Gather all the data the API needs:
 ```
 POST {config.json > supabase.api_base}/session-end
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+Authorization: Bearer {SUPABASE_ANON_KEY}
 X-MLS-Edge-Version: 1
 
 {

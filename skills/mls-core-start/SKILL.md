@@ -130,7 +130,7 @@ Never skip step 4 (present_files) — without it the user sees a dead file link.
 |---|---|---|
 | First-Run | `templates/first-run.jsx` | No `.mls/` exists. PHASE: `"connect"` → `"setup"` → `"capabilities"` → `"complete"` |
 | Reconnect | `templates/reconnect.jsx` | `.mls/` exists, returning session. Auto-plays 7 phases in ~5s. |
-| Upgrade | `templates/upgrade.jsx` | Version mismatch (v1→v2→v3→v4). 6-slide carousel. |
+| Upgrade | `templates/upgrade.jsx` | Version mismatch detected. 6-slide carousel. |
 | Loading | `templates/loading.jsx` | Between phases when doing work. Spinner + progress bar. |
 
 ### Template Placeholders
@@ -183,7 +183,7 @@ Check for `.mls/config.json` in the workspace folder.
 
 - **No `.mls/`** → First-Run Setup
 - **`.mls/config.json` exists, `initialized: false`** → First-Run Setup
-- **`.mls/config.json` exists, `initialized: true`** → Version Migration Check → Returning Session Bootstrap
+- **`.mls/config.json` exists, `initialized: true`** → Returning Session Bootstrap
 
 ### Self-Heal
 
@@ -197,47 +197,12 @@ Before proceeding, validate `.mls/` structure if it exists. Missing/corrupted fi
 
 ---
 
-## Version Migration (v3 → v4)
+## API Constants
 
-**Run this check before first-run or returning session, whenever `config.json` exists.**
-
-If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any version below `"3.1.6"`:
-
-1. **Inform the user:**
-   > "Upgrading to MLS Core v3.1.6 — sync is now Supabase-only. Your existing data is preserved. This takes a moment..."
-
-2. **Remove Notion keys** from config.json:
-   - Delete: `config.notion` (entire block)
-   - Delete: `community_brain.page_id`
-   - Delete: `community_brain.connected_projects_data_source_id`
-   - Delete: `community_brain.agent_marketplace_data_source_id`
-   - Delete: `community_brain.project_row_id`
-   - Delete: `dashboard.fallback_to_notion`
-   - Delete: `dashboard.notion_project_page_id`
-
-3. **Preserve Supabase keys** (if already set):
-   - Keep: `supabase.api_key`, `supabase.project_id`, `supabase.api_base`
-
-4. **Set or ensure these keys exist:**
-   - `supabase.api_base` → `"https://pjtqhxurdbaeatssorju.supabase.co/functions/v1"` (if not already set)
-   - `community_brain.enabled` → keep existing value (default: `true`)
-   - `community_brain.share_level` → keep existing value (default: `"anonymized_metrics"`)
-   - `dashboard.url` → `"https://memorylayer.pro/dashboard"`
-   - `sync.primary` → `"supabase"` (was `"notion"` or unset)
-
-5. **Bump version:**
-   - `mls_core_version` → `"3.1.6"`
-
-6. **Log migration in CHANGELOG.md** (append at top):
-   ```
-   ## Config Migration — [YYYY-MM-DD] | admin
-   **Summary:** Upgraded MLS Core config from v3 to v3.1.6. Supabase is now the only sync backend. Notion keys removed. Local context files and Supabase data are unchanged.
-   ```
-
-7. **If user had Notion configured:** Add a soft notice to the CHANGELOG entry:
-   > "Note: Your Notion pages still exist but are no longer synced by MLS Core. Supabase is now the single source of truth."
-
-After migration, continue to Returning Session Bootstrap.
+**Supabase anon key** — use as the `Authorization: Bearer` value for all edge function calls in this skill:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+```
 
 ---
 
@@ -275,7 +240,7 @@ The user already has a memorylayer.pro account. Skip the full connect phase enti
 ```
 POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/register
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+Authorization: Bearer {SUPABASE_ANON_KEY}
 
 
 { "email": "[stored email from global.json]" }
@@ -374,13 +339,13 @@ After the user provides their email, ask for a password:
 - Do not echo or display the password back to the user after they enter it.
 - If this is a returning user (email already has an account), the password is used to authenticate. If it doesn't match, the backend will return an error — re-prompt with: "Incorrect password. Please try again, or enter a different email."
 
-Take the email and password the user provides. **This endpoint requires the Supabase anon key as the Authorization header** — use the known value for memorylayer.pro: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli3Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4`
+Take the email and password the user provides. **This endpoint requires the Supabase anon key as the Authorization header** — use `{SUPABASE_ANON_KEY}` (defined in the API Constants section above).
 
 **Step 1 — Register / create account + project (one call):**
 ```
 POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/register
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+Authorization: Bearer {SUPABASE_ANON_KEY}
 
 
 {
@@ -608,7 +573,7 @@ Check `config.json > supabase.api_key`. If it exists and is not null:
 ```
 POST {config.json > supabase.api_base}/session-start
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+Authorization: Bearer {SUPABASE_ANON_KEY}
 
 
 {
