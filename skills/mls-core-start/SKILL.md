@@ -3,7 +3,7 @@ name: mls-core-start
 description: "Session start for MLS Core — the Memory Layer System. Handles both first-time setup (initializing persistent memory on a new folder) and returning-session bootstrap (loading context, displaying status, reading the last agent's handoff). Use this skill whenever the user says /mls-core-start, 'start session', 'start mls', 'bootstrap', 'load context', 'initialize mls', 'set up memory', or at the start of any session where the agent needs to work within an MLS Core-enabled folder. Also trigger if you detect a .mls/ directory in the current workspace — that means MLS Core is installed and you should bootstrap before doing any work."
 ---
 
-# MLS Core V3.1.6 — Session Start
+# MLS Core V3.1.7 — Session Start
 
 ## ⛔ HARD RULE: MODE ENFORCEMENT
 
@@ -201,10 +201,10 @@ Before proceeding, validate `.mls/` structure if it exists. Missing/corrupted fi
 
 **Run this check before first-run or returning session, whenever `config.json` exists.**
 
-If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any version below `"3.1.6"`:
+If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any version below `"3.1.7"`:
 
 1. **Inform the user:**
-   > "Upgrading to MLS Core v3.1.6 — sync is now Supabase-only. Your existing data is preserved. This takes a moment..."
+   > "Upgrading to MLS Core v3.1.7 — sync is now Supabase-only. Your existing data is preserved. This takes a moment..."
 
 2. **Remove Notion keys** from config.json:
    - Delete: `config.notion` (entire block)
@@ -226,12 +226,12 @@ If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any vers
    - `sync.primary` → `"supabase"` (was `"notion"` or unset)
 
 5. **Bump version:**
-   - `mls_core_version` → `"3.1.6"`
+   - `mls_core_version` → `"3.1.7"`
 
 6. **Log migration in CHANGELOG.md** (append at top):
    ```
    ## Config Migration — [YYYY-MM-DD] | admin
-   **Summary:** Upgraded MLS Core config from v3 to v3.1.6. Supabase is now the only sync backend. Notion keys removed. Local context files and Supabase data are unchanged.
+   **Summary:** Upgraded MLS Core config from v3 to v3.1.7. Supabase is now the only sync backend. Notion keys removed. Local context files and Supabase data are unchanged.
    ```
 
 7. **If user had Notion configured:** Add a soft notice to the CHANGELOG entry:
@@ -303,30 +303,78 @@ if response.hubs.length === 0:
   → Warn and fall through to local-only.
 ```
 
-**Visual mode:** Skip the connect screen. Go straight to a short text prompt (no JSX yet):
+**After hub is selected — fetch existing projects (silently, non-blocking):**
 
-> "Found your memorylayer.pro account ([email]).
->
-> Options:
-> 1. **New project** — create "[FolderName]" as a new project in [SELECTED_HUB.name]
-> 2. **Skip** — run local only for now"
+```
+GET {supabase.api_base}/projects?hub_id={SELECTED_HUB.id}
+X-MLS-Key: {api_key from global.json}
+X-MLS-Edge-Version: 1
+```
 
-(If multiple hubs, show the hub picker above first, then this prompt.)
+Response: `{ "projects": [ { "id": "uuid", "name": "...", "slug": "...", "tier": "free" } ] }`
 
-**Text mode:**
-> "Found your memorylayer.pro account ([email]). Create new project "[FolderName]" under [SELECTED_HUB.name], or skip to run local?"
+On failure or empty response: treat as `projects = []` and fall through to new-project flow.
 
-- **New / 1** → Call `POST /register` with stored email + folder name as `project_name` + `hub_id: SELECTED_HUB.id`. On success: store returned `project_id` and `hub_id` in config.json. Proceed to setup phase.
-- **Rename before creating** → Ask project name, then call register.
-- **Skip / 2** → Run local-only. Store nothing in `.mls/config.json`. User can connect later with `/mls-connect`.
+**Project picker (both modes — plain text, no JSX):**
 
-On any error: fall through to local-only, warn user.
+Build the option list dynamically:
+
+```
+if projects.length > 0:
+  → Show:
+  "Found your memorylayer.pro account ([email]) — [HubName] hub.
+  What would you like to do with this folder?
+  [1] Link to existing: [projects[0].name]
+  [2] Link to existing: [projects[1].name]
+  ... (one line per project)
+  [N+1] Create new project — "[FolderName]"
+  [N+2] Enter project ID manually
+  [N+3] Run local only for now
+  Reply with a number."
+
+if projects.length === 0:
+  → Show:
+  "Found your memorylayer.pro account ([email]) — [HubName] hub.
+  1. Create new project — "[FolderName]"
+  2. Enter project ID manually
+  3. Run local only for now
+  Reply with a number."
+```
+
+**On each choice:**
+
+- **Link to existing project** → Store `project_id = projects[chosen].id`, `hub_id = SELECTED_HUB.id`, `hub_slug = SELECTED_HUB.slug` in `config.json`. Do NOT call `POST /register` again — skip the setup phase entirely and jump straight to **Pull existing context**: call `/mls-pull` to load remote context into the local `.mls/` files. Confirm: "Linked to '[ProjectName]' ✓ — pulling your context now..."
+
+- **Create new project** → Call `POST /register` with stored email + folder name as `project_name` + `hub_id: SELECTED_HUB.id`. On success: store returned `project_id` and `hub_id` in `config.json`. Proceed to setup phase as normal.
+
+- **Enter project ID manually** → Prompt: "Paste your project UUID (find it at memorylayer.pro/dashboard → project settings):" Store the pasted value as `project_id` without calling register. Then pull existing context same as "Link to existing" above.
+
+- **Local only** → Run local-only. Store nothing. User can connect later with `/mls-connect`.
+
+**Pull existing context (after link or manual ID):**
+Run the same logic as the `mls-pull` skill — fetch remote context and write it into `.mls/context/` files. Then set `initialized: true` in `config.json` and go directly to **Returning Session Bootstrap** (skip onboarding, skip setup questions — context already exists remotely). Confirm with a single line: "Context loaded ✓ — [N] files synced from [ProjectName]."
+
+**Handling shared projects (project owned by another user, current user is a shared member):**
+
+The `/session-start` endpoint checks that the api_key matches the project **owner**. When a user is a shared member (added to the project via the dashboard by someone else), the endpoint returns `"Invalid api_key or project_id"` — this is expected and completely normal. **Do NOT frame this as an error or say "this may mean it's a pre-existing project with different ownership."** Shared access is a valid, intended workflow.
+
+When you get an "Invalid api_key or project_id" error while trying to pull context for a **linked** project (not a newly created one):
+
+1. Still write `project_id` and `hub_id` to `config.json` and set `initialized: true`.
+2. Initialize empty local context files (CONTEXT.md, GOALS.md, TASKS.md, CHANGELOG.md, etc.) with default templates.
+3. Confirm with:
+   > "Linked to '[ProjectName]' ✓ — running locally. This project is owned by another hub member, so cloud sync goes through their account. Your local context is live. Run `/mls-push` to contribute your session context."
+4. Proceed directly to **Returning Session Bootstrap**.
+
+On pull failure for any other reason (network error, 500, timeout): warn "Couldn't pull remote context — starting locally. Run `/mls-pull` when you're ready to sync." Then initialize with empty context files.
+
+On any other error in the whole flow: fall through to local-only, warn user.
 
 **Do not ask for an API key or email again.** Do not show the connect screen. The stored credentials are the account.
 
 ---
 
-**If `GLOBAL_CREDS_PATH` does not exist** (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`):
+**If `GLOBAL_CREDS_PATH` does not exist** (computed dynamically as `MNT_ROOT/.claude/mls/global.json`):
 
 Proceed with the full connect flow below as normal.
 
@@ -553,7 +601,7 @@ Resolution order: existing file with content → .template.md copy → config-te
 
 ### Initialize
 
-1. Update `config.json`: `mls_core_version` → "3.1.6", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
+1. Update `config.json`: `mls_core_version` → "3.1.7", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
 2. Initialize `metrics.json`: `instance_id`, `created_at`, `sessions.total_count` → 1, all v2 blocks
 3. Write first CHANGELOG entry with "For Next Agent" section
 4. **If connected to memorylayer.pro (sync.primary = "supabase"):** Write `GLOBAL_CREDS_PATH` (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`) with `{ "api_key": "[response.api_key]", "user_id": "[response.user.id]", "email": "[response.user.email]", "connected_at": "[ISO date]" }`. Create `/sessions/stoic-laughing-bardeen/mnt/.mls/` directory if it doesn't exist. **Do NOT use `~/.mls/` — that path is ephemeral and will not persist between sessions.** This is the account-level key returned by `POST /register` — it works frictionlessly across all future projects on this machine, no re-authentication needed.
@@ -625,7 +673,11 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 On success: store session ID in `.mls/active_session.json` as `{"session_id": "uuid", "started_at": "ISO"}`. Merge corrections and remote handoff with local context.
 
-On error: log it, write `{"session_id": null, "local_only": true, "error": "..."}`, continue in local-only mode.
+On error — **distinguish these two cases:**
+
+- **If the response body contains `"Invalid api_key or project_id"`** → This is a **shared project** scenario: the project was created under a different user account and the current api_key belongs to a shared member. This is expected and normal — do NOT treat it as a misconfiguration or show an error. Write `{"session_id": null, "local_only": true, "error": null}` (no error). Do not mention "Invalid api_key" to the user. Simply continue in local mode — the session status block already shows "memorylayer.pro: no" which is sufficient. Never say "the session-start API is rejecting the project ID" or suggest the project has a different owner. The user knows it's shared.
+
+- **Any other error (network, 500, timeout):** Log it, write `{"session_id": null, "local_only": true, "error": "[status/message]"}`, continue in local-only mode. Mention briefly that cloud sync is unavailable this session.
 
 If no API key configured: skip entirely. Local-only mode.
 
@@ -833,11 +885,11 @@ Increment `sessions.total_count`, record `started_at`. Bootstrap complete — re
 }
 ```
 
-## Full Config.json v3.1.6 Schema
+## Full Config.json v3.1.7 Schema
 
 ```json
 {
-  "mls_core_version": "3.1.6",
+  "mls_core_version": "3.1.7",
   "initialized": true,
   "initialization_date": "2026-04-10",
   "setup_method": "seed_from_files",

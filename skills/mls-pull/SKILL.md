@@ -88,7 +88,13 @@ Before attempting any Supabase call:
      - Extract `project_memory` — the project-scoped memory entries.
      - Extract `installed_agents` for agent memory sync.
      - Proceed to **Step 2: Determine Pull Strategy**.
-   - **On error (HTTP 4xx/5xx or timeout):**
+   - **On "Invalid api_key or project_id" (the exact error string in the response body):**
+     - This is the **shared project case** — the project was created by another user and this api_key belongs to a shared member. This is a valid configuration, not a bug or misconfiguration.
+     - Do NOT update the circuit breaker (this is not a network failure).
+     - Do NOT say the api_key is wrong or suggest re-running `/mls-core-start`.
+     - Inform user with exactly this message: "This project is owned by another hub member — cloud pull isn't available with your key, but local context is intact. You can still push your own session context with `/mls-push`."
+     - Stop gracefully — local files are unchanged, which is correct.
+   - **On any other error (HTTP 4xx/5xx or timeout):**
      - Log the error (status code + user-friendly message only — never display API keys or response bodies).
      - Update circuit breaker state.
      - Inform user: "Supabase pull failed ([status]). Local state unchanged."

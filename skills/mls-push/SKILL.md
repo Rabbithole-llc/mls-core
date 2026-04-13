@@ -130,6 +130,47 @@ Before attempting any Supabase call:
 
 ---
 
+## Step 2.5: File Uploads (when the user asks to upload a file)
+
+**If the user asks to "upload a file", "attach a file", or "push a file" — use the `/upload-file` endpoint, NOT `memory_type: "file"` in `/remember`.** Files uploaded via `/upload-file` appear in the Files page on the dashboard. Memory entries do not.
+
+### When to use `/upload-file`
+- User explicitly says "upload [filename]", "attach this file", or "add this to files"
+- User shares a file path or file content and wants it stored
+- Any time the intent is for the file to appear in `memorylayer.pro/dashboard → Files`
+
+### How to upload a file
+
+```
+POST {config.json > supabase.api_base}/upload-file
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
+X-MLS-Edge-Version: 1
+
+{
+  "account_key": "{config.json > supabase.api_key}",
+  "project_id":  "{config.json > supabase.project_id}",
+  "filename":    "notes.md",
+  "content":     "[full file content as UTF-8 string]",
+  "description": "[optional description]",
+  "session_id":  "[active session ID from active_session.json, or null]"
+}
+```
+
+For **binary files** (Excel, PDF, images, Word docs): read the file as base64 and add `"content_encoding": "base64"` to the body.
+
+For **text files** (`.md`, `.txt`, `.csv`, `.json`, etc.): pass raw UTF-8 string content directly, no encoding needed.
+
+**On success (201):** confirm "Uploaded [filename] ✓ — visible at memorylayer.pro/dashboard → Files."
+
+**On failure:** report the error clearly. Do NOT fall back to storing as a memory entry — that puts the file in the wrong place.
+
+### What NOT to do
+- **Never** use `memory_type: "file"` in `/remember` for user file uploads. That stores text blobs in the context database, not the Files storage — files stored that way won't appear on the Files page.
+- The `/remember` endpoint is only for session context (CONTEXT.md, GOALS.md, TASKS.md, CHANGELOG.md, corrections, handoffs).
+
+---
+
 ## Step 3: Update Local Sync State
 
 Update `config.json > sync`:
