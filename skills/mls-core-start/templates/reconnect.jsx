@@ -12,6 +12,9 @@ const DATA = {
   supabaseConnected: false,
   isWarmStart: false,
   lastSessionMinutesAgo: null,
+  // Up to 3 most-recently unlocked Achievement objects (sorted by unlocked_at desc).
+  // Each has: slug, name, description, icon, unlocked_at.
+  recentAchievements: [],
 };
 
 // ── JS-driven animation hook ──
@@ -277,6 +280,33 @@ export default function MLSBootReconnect() {
               ))}
             </div>
           </div>
+
+          {/* Phase 6.5: Recent Achievements Strip (amber pills) */}
+          {phase >= 6 && DATA.recentAchievements && DATA.recentAchievements.length > 0 && (
+            <div className={`mt-3 transition-all duration-500 ${phase >= 6 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                {DATA.recentAchievements.slice(0, 3).map((ach, i) => (
+                  <span key={i} style={{
+                    display: "inline-flex", alignItems: "center", gap: "5px",
+                    padding: "4px 10px", borderRadius: "20px",
+                    background: "rgba(251,191,36,0.10)",
+                    border: "1px solid rgba(251,191,36,0.22)",
+                    fontSize: "11px", color: "#fbbf24", fontFamily: "monospace",
+                    whiteSpace: "nowrap",
+                  }}>
+                    <span style={{ fontSize: "12px" }}>🏆</span>
+                    {ach.name}
+                  </span>
+                ))}
+                <span style={{
+                  fontSize: "11px", color: "rgba(251,191,36,0.4)", fontFamily: "monospace",
+                  marginLeft: "2px", cursor: "default",
+                }}>
+                  View all →
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Phase 7: Ready */}
           <div className={`mt-8 text-center transition-all duration-700 ${phase >= 7 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>

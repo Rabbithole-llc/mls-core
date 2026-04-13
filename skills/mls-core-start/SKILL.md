@@ -3,34 +3,23 @@ name: mls-core-start
 description: "Session start for MLS Core — the Memory Layer System. Handles both first-time setup (initializing persistent memory on a new folder) and returning-session bootstrap (loading context, displaying status, reading the last agent's handoff). Use this skill whenever the user says /mls-core-start, 'start session', 'start mls', 'bootstrap', 'load context', 'initialize mls', 'set up memory', or at the start of any session where the agent needs to work within an MLS Core-enabled folder. Also trigger if you detect a .mls/ directory in the current workspace — that means MLS Core is installed and you should bootstrap before doing any work."
 ---
 
-# MLS Core V3.1 — Session Start
+# MLS Core V3.1.6 — Session Start
 
 ## ⛔ HARD RULE: MODE ENFORCEMENT
 
-**Before writing a single JSX file or calling `present_files`, you MUST have confirmed `MODE = "visual"` from the user's explicit response.**
+**`MODE = "text"` is the default. Do NOT ask the user to choose between visual and text mode.** Skip straight to the text mode flow unless the user explicitly requests visual mode (e.g., says "visual", "graphics", or "visual mode").
 
-- If `MODE = "text"` → **never** use the Write tool for `.jsx` files. **Never** call `present_files`. All output is plain text only. Violating this is a critical failure.
-- If `MODE = "visual"` → use JSX templates as described below.
-- If the user chose "2", "text", "fast", or anything non-visual → `MODE = "text"`. Do not default to visual.
+- **Never** write JSX files or call `present_files` unless the user has explicitly requested visual mode.
+- All output is plain text only by default. Violating this is a critical failure.
+- If the user explicitly says "visual", "visual mode", or "graphics" → set `MODE = "visual"` and follow the Rendering Protocol below.
 
-**Checkpoint before every JSX write:** Ask yourself — "Did the user explicitly pick visual mode?" If no → do not write JSX. Output plain text instead.
+**Checkpoint before every JSX write:** Ask yourself — "Did the user explicitly request visual mode?" If no → do not write JSX. Output plain text instead.
 
 ---
 
-## Step -1: Ask Experience Mode
+## Step -1: Mode (Text Default — No Question Asked)
 
-**Before doing anything else**, ask the user which boot experience they want. Use plain text (no JSX yet):
-
-> "Welcome to MLS Core. How would you like to proceed?
-> 1. **Visual experience** — animated boot sequence with living backgrounds (recommended for first-time)
-> 2. **Text experience** — fast, no graphics, straight to business
->
-> Reply 1 or 2 (or just say 'text' or 'visual')."
-
-- If user says **1**, "visual", or anything explicitly indicating the graphic experience → set `MODE = "visual"` and follow the Rendering Protocol below.
-- If user says **2**, "text", "fast", "skip", "no graphics", or anything indicating text mode → set `MODE = "text"`. **Immediately stop. Do not write any JSX. Do not call present_files. Every single output from this point is plain text in the chat.** Still execute the full boot logic (detect state, read config, create .mls/, sync, etc.) — just deliver everything as concise text.
-- If user doesn't respond to the mode question and just says "yes" or confirms the folder → default to `MODE = "visual"`.
-- **Ambiguous reply (e.g., a number that could be a folder pick or mode pick):** re-read the conversation. If you haven't yet shown the mode question, treat the reply as a mode pick. "2" = text mode.
+**Do NOT ask the user which mode they want.** Always set `MODE = "text"` and proceed directly to folder selection. The visual mode rendering protocol still exists in this file if a user explicitly requests it, but it is never offered or prompted.
 
 **In text mode**, replace each visual phase with a brief text equivalent:
 - "folder_pick" → list all mounted folders, ask which one to use for MLS
@@ -212,10 +201,10 @@ Before proceeding, validate `.mls/` structure if it exists. Missing/corrupted fi
 
 **Run this check before first-run or returning session, whenever `config.json` exists.**
 
-If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any version below `"3.1.0"`:
+If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any version below `"3.1.6"`:
 
 1. **Inform the user:**
-   > "Upgrading to MLS Core v3.1.0 — sync is now Supabase-only. Your existing data is preserved. This takes a moment..."
+   > "Upgrading to MLS Core v3.1.6 — sync is now Supabase-only. Your existing data is preserved. This takes a moment..."
 
 2. **Remove Notion keys** from config.json:
    - Delete: `config.notion` (entire block)
@@ -237,12 +226,12 @@ If `mls_core_version` is `"3.0.4"`, `"3.0.2"`, `"3.0.0"`, `"2.0.0"`, or any vers
    - `sync.primary` → `"supabase"` (was `"notion"` or unset)
 
 5. **Bump version:**
-   - `mls_core_version` → `"3.1.0"`
+   - `mls_core_version` → `"3.1.6"`
 
 6. **Log migration in CHANGELOG.md** (append at top):
    ```
    ## Config Migration — [YYYY-MM-DD] | admin
-   **Summary:** Upgraded MLS Core config from v3 to v3.1.0. Supabase is now the only sync backend. Notion keys removed. Local context files and Supabase data are unchanged.
+   **Summary:** Upgraded MLS Core config from v3 to v3.1.6. Supabase is now the only sync backend. Notion keys removed. Local context files and Supabase data are unchanged.
    ```
 
 7. **If user had Notion configured:** Add a soft notice to the CHANGELOG entry:
@@ -377,7 +366,15 @@ Wait for the user's choice (1, 2, or the name of the option).
 Ask:
 > "Enter your email address to create your free memorylayer.pro account (or log in if you already have one):"
 
-Take the email the user provides. **This endpoint requires the Supabase anon key as the Authorization header** — use the known value for memorylayer.pro: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4`
+After the user provides their email, ask for a password:
+> "Choose a password for your account (minimum 8 characters):"
+
+**Password rules:**
+- Minimum 8 characters. If the user enters fewer than 8, re-prompt: "Password must be at least 8 characters. Please try again."
+- Do not echo or display the password back to the user after they enter it.
+- If this is a returning user (email already has an account), the password is used to authenticate. If it doesn't match, the backend will return an error — re-prompt with: "Incorrect password. Please try again, or enter a different email."
+
+Take the email and password the user provides. **This endpoint requires the Supabase anon key as the Authorization header** — use the known value for memorylayer.pro: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli3Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4`
 
 **Step 1 — Register / create account + project (one call):**
 ```
@@ -388,15 +385,20 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 {
   "email": "[the email they entered]",
+  "password": "[the password they entered]",
   "project_name": "[folder name chosen in Step -0.5]"
 }
 ```
 
-This endpoint is **idempotent** — if the email already has an account, it returns the existing `api_key` and provisions the new project under it. No separate "list" step or pre-existing key required.
+This endpoint is **idempotent** — if the email already has an account, it authenticates with the password and provisions the new project under it. No separate "list" step or pre-existing key required.
 
 **On 400 (invalid email format):**
 > "That doesn't look like a valid email address. Please try again."
 Re-prompt the email.
+
+**On 401 (incorrect password):**
+> "Incorrect password. Please try again, or enter a different email."
+Re-prompt the password (do not re-ask for email unless the user wants to change it).
 
 **On 422 (validation error):**
 > "Couldn't create your account — check that your email is correct, or choose Local instead."
@@ -551,7 +553,7 @@ Resolution order: existing file with content → .template.md copy → config-te
 
 ### Initialize
 
-1. Update `config.json`: `mls_core_version` → "3.1.0", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
+1. Update `config.json`: `mls_core_version` → "3.1.6", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
 2. Initialize `metrics.json`: `instance_id`, `created_at`, `sessions.total_count` → 1, all v2 blocks
 3. Write first CHANGELOG entry with "For Next Agent" section
 4. **If connected to memorylayer.pro (sync.primary = "supabase"):** Write `GLOBAL_CREDS_PATH` (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`) with `{ "api_key": "[response.api_key]", "user_id": "[response.user.id]", "email": "[response.user.email]", "connected_at": "[ISO date]" }`. Create `/sessions/stoic-laughing-bardeen/mnt/.mls/` directory if it doesn't exist. **Do NOT use `~/.mls/` — that path is ephemeral and will not persist between sessions.** This is the account-level key returned by `POST /register` — it works frictionlessly across all future projects on this machine, no re-authentication needed.
@@ -651,6 +653,117 @@ Determine from `config.json > sync.primary`:
 
 **`"local"`:** Skip.
 
+### Step 4.6: Achievement Check
+
+After the session bootstrap (context loaded, status displayed), run a lightweight achievement diff — silently if no new achievements, inline notification if any newly unlocked.
+
+**Data Model:** Each `Achievement` object has:
+- `slug` — string identifier (e.g. `"streak-7"`)
+- `name` — display name
+- `description` — short description
+- `icon` — Lucide icon name: `zap`, `calendar`, `clock`, `brain`, `target`, `refresh`, `cpu`, `layers`, `folder`, or `users`
+- `unlocked_at` — ISO timestamp (present on unlocked achievements only)
+- `progress` — number 0–100 (present on in-progress achievements only)
+
+**Category map (slug → category):**
+- Sessions: `first-contact`, `streak-3`, `streak-7`, `streak-30`, `warm-starter`
+- Memory: `memory-keeper`, `goal-crusher`, `correction-loop`, `time-saver`, `century-club`
+- Agents: `agent-activated`, `agent-loop`, `multi-agent`, `agent-veteran`
+- Projects & Hubs: `founder`, `multi-project`, `team-player`
+- Community: `brain-sharer`
+
+**1. Read the local cache:**
+Check for `.mls/achievements.json`. If it doesn't exist, create it now with defaults:
+```json
+{
+  "last_checked": "[ISO timestamp now]",
+  "unlocked": [],
+  "in_progress": [],
+  "locked": []
+}
+```
+
+**2. Call the achievements endpoint (non-blocking):**
+```
+GET {config.json > supabase.api_base}/achievements
+X-MLS-Key: {config.json > supabase.account_key ?? config.json > supabase.api_key}
+X-MLS-Edge-Version: 1
+```
+
+Response shape:
+```json
+{
+  "unlocked":     [ { "slug": "...", "name": "...", "description": "...", "icon": "...", "unlocked_at": "ISO" } ],
+  "in_progress":  [ { "slug": "...", "name": "...", "description": "...", "icon": "...", "progress": 42 } ],
+  "locked":       [ { "slug": "...", "name": "...", "description": "...", "icon": "..." } ]
+}
+```
+
+If both `account_key` and `api_key` are null, or the call fails for any reason → skip silently and continue. Never block session start.
+
+`account_key` takes precedence over `api_key` for the `X-MLS-Key` header. Fall back to `api_key` if `account_key` is null.
+
+**3. Diff against cache:**
+Compare `response.unlocked[].slug` against `.mls/achievements.json > unlocked[].slug`.
+
+- If there are **new achievements** (slugs in response but not in cache) → display for each:
+  > 🏆 Achievement unlocked: **[Name]** — [Description]
+
+  After listing all new achievements, append:
+  > View all achievements → /dashboard/achievements
+
+- If **no new achievements** → skip silently. Do not print anything.
+
+**4. Update the cache:**
+Write the full response arrays back to `.mls/achievements.json`:
+```json
+{
+  "last_checked": "[ISO timestamp now]",
+  "unlocked":    [...full unlocked array from response...],
+  "in_progress": [...full in_progress array from response...],
+  "locked":      [...full locked array from response...]
+}
+```
+
+**5. Surface recent achievements in the session status block:**
+After displaying the standard text-mode session status, if `response.unlocked.length > 0`, append one compact line showing up to 3 most recently unlocked achievements (sorted by `unlocked_at` descending):
+> 🏆 [Name1] · [Name2] · [Name3]  →  /dashboard/achievements
+
+Only show this line when there are unlocked achievements. Omit entirely if the array is empty.
+
+**Rules:**
+- Entirely non-blocking. Any failure (missing cache, API error, parse error) → skip silently, continue.
+- Do not display the achievement check in progress. Only surface the result if there's something new.
+- If the API call fails, do NOT clear the cache — preserve the last known state.
+
+---
+
+### Step 4.7: Achievements Page (`/dashboard/achievements`)
+
+When the user says "show achievements", "view achievements", "open /dashboard/achievements", or navigates to that route:
+
+**1. Load data:**
+Read `.mls/achievements.json`. If the cache is missing or `last_checked` is more than 5 minutes ago, re-call the achievements endpoint (same headers as Step 4.6, Step 2) and update the cache before proceeding.
+
+**2. Build the template:**
+Read `templates/achievements.jsx` from this skill's templates directory. Fill in `ACHIEVEMENTS_DATA` with the full cached response:
+```js
+const ACHIEVEMENTS_DATA = {
+  unlocked:    [...],  // Achievement[] sorted by unlocked_at descending
+  in_progress: [...],  // Achievement[] sorted by progress descending
+  locked:      [...],  // Achievement[]
+};
+```
+
+**3. Write and present:**
+Write the populated component as `mls-achievements.jsx` to the workspace folder, then call `present_files` with that path.
+
+**Rules:**
+- Only run when explicitly requested — not automatically during bootstrap.
+- If `achievements.json` is empty (no data yet), render the page with empty arrays so the user sees the full category structure with all achievements locked.
+
+---
+
 ### Finalize
 
 Increment `sessions.total_count`, record `started_at`. Bootstrap complete — ready for work.
@@ -720,11 +833,11 @@ Increment `sessions.total_count`, record `started_at`. Bootstrap complete — re
 }
 ```
 
-## Full Config.json v3.1.0 Schema
+## Full Config.json v3.1.6 Schema
 
 ```json
 {
-  "mls_core_version": "3.1.0",
+  "mls_core_version": "3.1.6",
   "initialized": true,
   "initialization_date": "2026-04-10",
   "setup_method": "seed_from_files",
