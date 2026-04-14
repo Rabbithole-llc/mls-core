@@ -145,6 +145,73 @@ Or find it at [memorylayer.pro/dashboard → Settings → API Keys](https://memo
 
 ---
 
+### Approach C: REST API (GPT, OpenAI, any HTTP client)
+
+The memorylayer.pro backend exposes a REST API directly. No plugin, no MCP server required — any tool that can make HTTP calls works.
+
+**Base URL:** `https://pjtqhxurdbaeatssorju.supabase.co/functions/v1`
+
+**Auth:** All endpoints require two headers:
+```
+Authorization: Bearer {SUPABASE_ANON_KEY}
+X-MLS-Key: {your-api-key}         ← your ml_... account key
+X-MLS-Edge-Version: 1
+```
+
+**Core endpoints:**
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/register` | Create account or log in, provision project |
+| `POST` | `/session-start` | Start a session, fetch remote corrections |
+| `POST` | `/session-end` | Close session, write handoff |
+| `POST` | `/remember` | Push memory entries (context, facts, observations) |
+| `POST` | `/recall` | Pull context entries for a project |
+| `POST` | `/upload-file` | Upload a file (text or binary/base64) |
+| `GET` | `/projects` | List projects for a hub |
+| `GET` | `/achievements` | Get achievement state |
+| `GET` | `/hub-brain` | Query Community Brain (hub-shared entries) |
+
+**Minimal push example:**
+```bash
+curl -X POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/remember \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {SUPABASE_ANON_KEY}" \
+  -H "X-MLS-Key: ml_your_key_here" \
+  -H "X-MLS-Edge-Version: 1" \
+  -d '{
+    "api_key": "ml_your_key_here",
+    "project_id": "your-project-uuid",
+    "entries": [{
+      "scope": "project",
+      "memory_type": "fact",
+      "confidence_score": 0.9,
+      "content": { "fact": "..." },
+      "tags": ["api-push"]
+    }]
+  }'
+```
+
+**Your API key** is in `.mls/config.json > supabase.api_key` in any project where you've run `/mls-core-start`, or at [memorylayer.pro/dashboard → Settings → API Keys](https://memorylayer.pro/dashboard).
+
+For full API reference and OpenAPI spec, see [memorylayer.pro/docs/api](https://memorylayer.pro/docs/api).
+
+---
+
+### Approach D: Custom GPT (OpenAI GPTs)
+
+Connect MLS Core to a Custom GPT via the REST API using OpenAI's **Actions** system.
+
+1. In the GPT builder, go to **Configure → Actions → Create new action**
+2. Set the **base URL** to `https://pjtqhxurdbaeatssorju.supabase.co/functions/v1`
+3. Add an **API key** authentication header: `X-MLS-Key` with your `ml_...` key
+4. Import or paste the MLS Core OpenAPI schema from [memorylayer.pro/docs/openapi](https://memorylayer.pro/docs/openapi)
+5. In the GPT system prompt, instruct it to call `remember` at session end and `recall` at session start with your `project_id`
+
+The GPT can then push and pull memory without any plugin or MCP server — it makes direct HTTP calls via the Actions system.
+
+---
+
 ## License Tiers
 
 | Feature | Starter | Pro | Enterprise |

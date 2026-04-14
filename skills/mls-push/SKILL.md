@@ -94,7 +94,42 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHV
    hub_id     = hub_shared ? config.json > hub.id : omit
    ```
 
-4. Build memory entries from local state and stamp each with hub fields:
+4. Build memory entries from local state and stamp each with hub fields.
+
+**Memory type categories** — set `memory_type` based on the nature of the entry:
+
+| `memory_type` | Use for |
+|---|---|
+| `context_snapshot` | Full project context dump (CONTEXT.md + GOALS.md + TASKS.md + CHANGELOG) |
+| `fact` | Objective facts about the project (decisions, architecture, config) |
+| `observation` | Agent observations about patterns, user behavior, code quality |
+| `preference` | User preferences and working style notes |
+| `action` | Things the agent did or was asked to do this session |
+| `feedback` | Corrections, positive/negative feedback, behavioral guidance |
+
+**Confidence scoring** — set `confidence_score` on every entry:
+
+| Score | Meaning | When to use |
+|---|---|---|
+| `0.9`–`1.0` | Verified | Explicitly confirmed by user, pulled from authoritative source (config, code) |
+| `0.7` | Default | Inferred from context with reasonable certainty |
+| `0.5` | Low confidence | Guessed or inferred from ambiguous signals |
+
+Default to `0.7` if confidence is not explicitly determined.
+
+**Temporal fact tracking** — when pushing a `fact` entry that updates an existing fact, set `superseded_by` on the old fact rather than deleting it. This preserves history. The `/remember` endpoint handles supersession server-side when `supersedes_entry_id` is provided:
+
+```json
+{
+  "memory_type": "fact",
+  "content": { "fact": "new value" },
+  "supersedes_entry_id": "[id of the old fact entry, if known]"
+}
+```
+
+If the entry ID of the old fact is not known locally, omit `supersedes_entry_id` — the server will use semantic deduplication to detect and link superseded facts automatically.
+
+**Full entry schema:**
    ```json
    {
      "api_key": "{supabase.api_key}",
@@ -103,6 +138,7 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHV
        {
          "scope": "project",
          "memory_type": "context_snapshot",
+         "confidence_score": 0.9,
          "content": {
            "context": "[full CONTEXT.md content]",
            "goals": "[full GOALS.md content]",

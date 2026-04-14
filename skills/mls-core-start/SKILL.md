@@ -621,7 +621,23 @@ Write as `mls-boot.jsx` → call `present_files` → STOP.
 
 In text mode, immediately proceed to Step 3 after printing this summary — do not wait for user input.
 
-**Step 3 (background):** While animation plays, read all context files:
+**Step 3 (background):** While animation plays, load context files according to the active **load depth** (see Memory Load Depth below).
+
+### Memory Load Depth
+
+The `depth` setting (read from `config.json > preferences.load_depth`, default `"standard"`) controls how much context is loaded at session start:
+
+| Depth | What's loaded | When to use |
+|---|---|---|
+| `minimal` | `config.json`, `metrics.json`, last CHANGELOG entry (For Next Agent only) | Quick tasks, follow-up sessions, low-context work |
+| `standard` *(default)* | All 7 context files + Session Start API call | Normal sessions — full context with remote corrections merged |
+| `full` | Everything in `standard` + hub brain query (Community Brain entries, top-10 relevant) | Deep research, onboarding new agents, cross-project work |
+
+**Default is `standard`.** Only load `full` if the user explicitly requests it or `config.json > preferences.load_depth = "full"`. Never default to `full` — it adds latency.
+
+**Overriding at session start:** The user can say "minimal start", "full context load", etc. Parse intent and set depth for this session only — do not persist the override to config.
+
+**`standard` and `full` load these files:**
 1. CHANGELOG.md → full latest handoff
 2. CONTEXT.md → project knowledge
 3. TASKS.md → current tasks
@@ -629,6 +645,17 @@ In text mode, immediately proceed to Step 3 after printing this summary — do n
 5. FEEDBACK.md → behavioral patterns
 6. PREFERENCES.md → user preferences
 7. CORRECTIONS.md → active corrections (override CONTEXT.md conflicts)
+
+**`minimal` loads only:**
+1. CHANGELOG.md → For Next Agent section only (last entry, first 30 lines)
+
+**`full` additionally queries after Step 4:**
+```
+GET {config.json > supabase.api_base}/hub-brain?project_id={project_id}&limit=10
+X-MLS-Key: {config.json > supabase.api_key}
+X-MLS-Edge-Version: 1
+```
+Merge results into context silently. If the call fails, continue without it.
 
 ### Step 4: Call Session Start API
 
