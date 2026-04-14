@@ -1,7 +1,7 @@
 {
   "name": "memory-layer-core",
   "version": "4.1.0",
-  "description": "Give your AI agent a memory. Every session picks up where the last one left off — context, tasks, goals, and a handoff note from the previous agent. Works in any project folder. Free to start.",
+  "description": "Your AI remembers everything between sessions. Context, tasks, goals, and a handoff note persist automatically — so every new session picks up exactly where the last one left off. Free to start.",
   "author": {
     "name": "Rabbithole LLC"
   },
