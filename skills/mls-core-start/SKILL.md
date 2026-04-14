@@ -3,7 +3,7 @@ name: mls-core-start
 description: "Session start for MLS Core — the Memory Layer System. Handles both first-time setup (initializing persistent memory on a new folder) and returning-session bootstrap (loading context, displaying status, reading the last agent's handoff). Use this skill whenever the user says /mls-core-start, 'start session', 'start mls', 'bootstrap', 'load context', 'initialize mls', 'set up memory', or at the start of any session where the agent needs to work within an MLS Core-enabled folder. Also trigger if you detect a .mls/ directory in the current workspace — that means MLS Core is installed and you should bootstrap before doing any work."
 ---
 
-# MLS Core V3.1.7 — Session Start
+# MLS Core V4.0.0 — Session Start
 
 ## ⛔ HARD RULE: MODE ENFORCEMENT
 
@@ -582,7 +582,7 @@ Resolution order: existing file with content → .template.md copy → config-te
 
 ### Initialize
 
-1. Update `config.json`: `mls_core_version` → "3.1.7", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
+1. Update `config.json`: `mls_core_version` → "4.0.0", `initialized` → true, `initialization_date`, `setup_method`, `project.name`, ensure `preferences` block, `supabase` block (even if null values), `sync` block
 2. Initialize `metrics.json`: `instance_id`, `created_at`, `sessions.total_count` → 1, all v2 blocks
 3. Write first CHANGELOG entry with "For Next Agent" section
 4. **If connected to memorylayer.pro (sync.primary = "supabase"):** Write `GLOBAL_CREDS_PATH` (`/sessions/stoic-laughing-bardeen/mnt/.mls/global.json`) with `{ "api_key": "[response.api_key]", "user_id": "[response.user.id]", "email": "[response.user.email]", "connected_at": "[ISO date]" }`. Create `/sessions/stoic-laughing-bardeen/mnt/.mls/` directory if it doesn't exist. **Do NOT use `~/.mls/` — that path is ephemeral and will not persist between sessions.** This is the account-level key returned by `POST /register` — it works frictionlessly across all future projects on this machine, no re-authentication needed.
@@ -671,6 +671,7 @@ Authorization: Bearer {SUPABASE_ANON_KEY}
   "api_key": "{config.json > supabase.api_key}",
   "project_id": "{config.json > supabase.project_id}",
   "start_type": "{warm|cold}",
+  "depth": "{resolved load depth: minimal | standard | full — default: standard}",
   "load": {
     "scopes": ["project", "agent_portable", "agent_project"],
     "include_corrections": true,

@@ -167,7 +167,8 @@ X-MLS-Edge-Version: 1
 | `POST` | `/session-end` | Close session, write handoff |
 | `POST` | `/remember` | Push memory entries (context, facts, observations) |
 | `POST` | `/recall` | Pull context entries for a project |
-| `POST` | `/upload-file` | Upload a file (text or binary/base64) |
+| `POST` | `/file-upload` | Upload a file (text or binary/base64) |
+| `POST` | `/file-ops` | List, download, or delete stored files |
 | `GET` | `/projects` | List projects for a hub |
 | `GET` | `/achievements` | Get achievement state |
 | `GET` | `/hub-brain` | Query Community Brain (hub-shared entries) |

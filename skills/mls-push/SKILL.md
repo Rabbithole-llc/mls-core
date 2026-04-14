@@ -173,9 +173,9 @@ If the entry ID of the old fact is not known locally, omit `supersedes_entry_id`
 
 ## Step 2.5: File Uploads (when the user asks to upload a file)
 
-**If the user asks to "upload a file", "attach a file", or "push a file" — use the `/upload-file` endpoint, NOT `memory_type: "file"` in `/remember`.** Files uploaded via `/upload-file` appear in the Files page on the dashboard. Memory entries do not.
+**If the user asks to "upload a file", "attach a file", or "push a file" — use the `/file-upload` endpoint, NOT `memory_type: "file"` in `/remember`.** Files uploaded via `/file-upload` appear in the Files page on the dashboard. Memory entries do not.
 
-### When to use `/upload-file`
+### When to use `/file-upload`
 - User explicitly says "upload [filename]", "attach this file", or "add this to files"
 - User shares a file path or file content and wants it stored
 - Any time the intent is for the file to appear in `memorylayer.pro/dashboard → Files`
@@ -183,7 +183,7 @@ If the entry ID of the old fact is not known locally, omit `supersedes_entry_id`
 ### How to upload a file
 
 ```
-POST {config.json > supabase.api_base}/upload-file
+POST {config.json > supabase.api_base}/file-upload
 Content-Type: application/json
 Authorization: Bearer {SUPABASE_ANON_KEY}
 X-MLS-Edge-Version: 1
@@ -209,6 +209,7 @@ For **text files** (`.md`, `.txt`, `.csv`, `.json`, etc.): pass raw UTF-8 string
 ### What NOT to do
 - **Never** use `memory_type: "file"` in `/remember` for user file uploads. That stores text blobs in the context database, not the Files storage — files stored that way won't appear on the Files page.
 - The `/remember` endpoint is only for session context (CONTEXT.md, GOALS.md, TASKS.md, CHANGELOG.md, corrections, handoffs).
+- For listing or downloading already-stored files, use `/file-ops` (or delegate to the `/mls-upload` skill which documents that endpoint).
 
 ---
 

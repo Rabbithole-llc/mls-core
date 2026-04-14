@@ -86,7 +86,7 @@ For each file to upload, call the upload endpoint with single-retry.
 
 ### Text file payload (UTF-8 content):
 ```
-POST {config.json > supabase.api_base}/upload-file
+POST {config.json > supabase.api_base}/file-upload
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
 X-MLS-Edge-Version: 1
@@ -103,7 +103,7 @@ X-MLS-Edge-Version: 1
 
 ### Binary file payload (base64-encoded content):
 ```
-POST {config.json > supabase.api_base}/upload-file
+POST {config.json > supabase.api_base}/file-upload
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdHFoeHVyZGJhZWF0c3Nvcmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODE5MjEsImV4cCI6MjA5MDc1NzkyMX0.b2pW95mCli7Rwij10pGbcrlXP2QY9_lHtJiK2L1mgn4
 X-MLS-Edge-Version: 1
@@ -121,7 +121,7 @@ X-MLS-Edge-Version: 1
 ```
 
 **Retry protocol for each file:**
-1. POST `{api_base}/upload-file` with the appropriate payload above
+1. POST `{api_base}/file-upload` with the appropriate payload above
 2. If the response is not 2xx OR the request times out:
    a. Wait 2 seconds
    b. Retry the same POST once
@@ -160,6 +160,34 @@ For bulk uploads, if some succeed and some fail:
 > "Uploaded [N]/7 context files. [M] failed:
 > - [filename]: [error]
 > Retry failed uploads with `/mls-upload`."
+
+---
+
+## Edge Function Endpoints
+
+This skill uses two edge functions for file management:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /file-upload` | Upload a new file (text or binary/base64) — used in Step 3 above |
+| `POST /file-ops` | File operations: list, download, delete files already stored in the project |
+
+**Using `/file-ops`** (when the user asks to list, download, or delete a stored file):
+```
+POST {config.json > supabase.api_base}/file-ops
+Content-Type: application/json
+Authorization: Bearer {SUPABASE_ANON_KEY}
+X-MLS-Edge-Version: 1
+
+{
+  "account_key": "{config.json > supabase.api_key}",
+  "project_id": "{config.json > supabase.project_id}",
+  "op": "list" | "download" | "delete",
+  "filename": "{filename — required for download and delete}"
+}
+```
+
+The `/file-ops` endpoint is not triggered by `/mls-upload` directly — it powers listing and downloading via MCP tools (`mls_list_files`, `mls_download_file`) or direct API calls.
 
 ---
 
