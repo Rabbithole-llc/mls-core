@@ -1,6 +1,6 @@
 ---
 name: mls-core-stop
-description: "Session close for MLS Core. Saves context, marks completed tasks, writes the 'For Next Agent' handoff, updates goals and metrics, syncs to remote. Trigger on /mls-core-stop, 'end session', 'wrap up', 'save and close', or 'write handoff'."
+description: "End a session and save everything. Run /mls-core-stop when you're done — writes the handoff note, updates context, and syncs to the cloud."
 ---
 
 # MLS Core V3.1 — Session Close

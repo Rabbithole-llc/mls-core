@@ -1,6 +1,6 @@
 ---
 name: mls-agents
-description: "Manage MLS agents from the Agent Marketplace and local packages. Browse, install, or remove agent modules. Trigger on /mls-agents, 'show agents', 'browse agents', 'install agent', 'remove agent', or 'agent marketplace'."
+description: "Browse and install agent modules. Run /mls-agents to see available agents and add them to your project."
 ---
 
 # MLS Agents — Agent Marketplace & Package Manager

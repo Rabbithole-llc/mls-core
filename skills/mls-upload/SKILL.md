@@ -1,6 +1,6 @@
 ---
 name: mls-upload
-description: "Upload files to your memorylayer.pro project. Supports text files (.md, .txt, .csv, .json) and binary files (.xlsx, .pdf, .docx, images, etc.). Trigger on /mls-upload, 'upload file', 'upload this', 'save to project files', 'push this file', or 'sync file'."
+description: "Upload a file to your project. Run /mls-upload or say 'upload [filename]'. Supports text files and binaries (PDF, Excel, images, etc.)."
 ---
 
 # MLS Core V4.0.0 — Upload File

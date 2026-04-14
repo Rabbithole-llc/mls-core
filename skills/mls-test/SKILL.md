@@ -1,6 +1,6 @@
 ---
 name: mls-test
-description: "System health check for MLS Core. Validates file structure, agent configs, skill paths, and connections. Trigger on /mls-test, 'test my setup', 'health check', 'run diagnostics', or after installing/removing agents."
+description: "Check that MLS Core is working. Run /mls-test to validate your setup, files, and cloud connection."
 ---
 
 # MLS Test — System Health Check

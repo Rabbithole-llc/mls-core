@@ -1,7 +1,7 @@
 {
   "name": "memory-layer-core",
-  "version": "4.0.0",
-  "description": "Memory Layer (MLS Core) — persistent memory for AI agents. Every session builds on the last with context, tasks, goals, handoff notes, feedback loops, and cloud sync via Supabase. Install once, remember forever.",
+  "version": "4.1.0",
+  "description": "Give your AI agent a memory. Every session picks up where the last one left off — context, tasks, goals, and a handoff note from the previous agent. Works in any project folder. Free to start.",
   "author": {
     "name": "Rabbithole LLC"
   },

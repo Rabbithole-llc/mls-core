@@ -1,6 +1,6 @@
 ---
 name: mls-pull
-description: "Pull remote context into local MLS Core files from Supabase. Essential for multi-machine workflows. Trigger on /mls-pull, 'sync down', 'pull context', 'get latest', 'refresh from remote', or 'pull from supabase'."
+description: "Load the latest context from the cloud. Run /mls-pull to sync remote changes into your local files."
 ---
 
 # MLS Core — Pull from Remote
