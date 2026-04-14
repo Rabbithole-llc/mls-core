@@ -25,7 +25,7 @@ Install the MLS Core plugin directly into Claude Code. The plugin ships skill fi
 
 1. Open Claude Code
 2. Run `/plugins` or navigate to **Settings → Plugins**
-3. Click **Install from file** and select `memory-layer-core-4.0.0.plugin`
+3. Click **Install from file** and select `memory-layer-core-4.1.0.plugin`
    — or install from the marketplace at [memorylayer.pro](https://memorylayer.pro)
 4. In any project folder, run `/mls-core-start`
 
@@ -360,7 +360,7 @@ All approaches share the same backend, the same `project_id`, and the same memor
 | `401 Unauthorized` | Check `MLS_API_KEY` / `X-MLS-Key` — must be your `ml_...` account key |
 | `"Invalid api_key or project_id"` | Normal for shared projects — your key is a member key, not the owner key. Run locally and use `/mls-push` to contribute. |
 | MCP tools not appearing | Restart the AI tool after adding the MCP config. Verify `npx @memorylayer/mcp-server` runs without error. |
-| Plugin not loading | Make sure the `.plugin` file is v4.0.0. Re-install via Claude Code Settings → Plugins. |
+| Plugin not loading | Make sure the `.plugin` file is v4.1.0. Re-install via Claude Code Settings → Plugins. |
 | Push rejected (tier limit) | Free tier: 3 projects, 30-day history. Upgrade at memorylayer.pro/dashboard. |
 | Network timeout | Check `~/.mls/sync_health.json` — circuit breaker may be open. Wait 15 minutes. |
 
