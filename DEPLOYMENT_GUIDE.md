@@ -192,7 +192,8 @@ The `SUPABASE_ANON_KEY` is the public Supabase JWT for the memorylayer.pro proje
 | `POST` | `/session-end` | Close session, write handoff note |
 | `POST` | `/remember` | Push memory entries |
 | `POST` | `/recall` | Pull context for a project |
-| `POST` | `/upload-file` | Upload a file (text or base64 binary) |
+| `POST` | `/file-upload` | Upload a file (text or base64 binary) |
+| `POST` | `/file-ops` | List, download, or delete stored files |
 | `GET` | `/projects?hub_id={id}` | List projects for a hub |
 | `GET` | `/achievements` | Get achievement state |
 | `GET` | `/hub-brain?project_id={id}&limit=10` | Query Community Brain |
@@ -259,7 +260,7 @@ curl -X POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/recall \
 ### Upload a file
 
 ```bash
-curl -X POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/upload-file \
+curl -X POST https://pjtqhxurdbaeatssorju.supabase.co/functions/v1/file-upload \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {SUPABASE_ANON_KEY}" \
   -H "X-MLS-Key: ml_your_key_here" \
@@ -332,7 +333,7 @@ Always set confidence_score:
 - No local `.mls/` files — context is cloud-only
 - No `/mls-core-start` visual UI — context is loaded/saved inline
 - No agent marketplace — `mls_agent_*` tools are not available in GPT Actions
-- File uploads work via the `upload-file` endpoint directly
+- File uploads work via the `file-upload` endpoint directly
 
 ---
 
